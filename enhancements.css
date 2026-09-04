@@ -1,0 +1,20 @@
+[hidden] { display: none !important; }
+.assistant-panel, .performance-panel { grid-column: 1 / -1; }
+.assistant-log { display: grid; gap: 9px; max-height: 190px; overflow: auto; margin-bottom: 14px; }
+.assistant-message { display: flex; align-items: start; gap: 9px; max-width: 720px; }
+.assistant-message span { flex: 0 0 auto; color: var(--cyan); font: 10px 'DM Mono', monospace; }
+.assistant-message p { margin: 0; padding: 9px 12px; line-height: 1.5; background: #1e3147; }
+.assistant-message.user { margin-left: auto; justify-content: end; }
+.assistant-message.user span { order: 2; color: var(--orange); }
+.assistant-message.user p { background: #30483e; }
+.assistant-form { display: flex; border-bottom: 1px solid var(--line); }
+.assistant-form input { width: 100%; border: 0; outline: 0; padding: 11px 0; background: transparent; color: var(--ink); }
+.assistant-form button { border: 0; background: transparent; color: var(--cyan); font-size: 20px; }
+.command-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.command-chips button { padding: 6px 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 11px; }
+.command-chips button:hover, .command-chips button:focus-visible { border-color: var(--cyan); color: var(--ink); }
+.signal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.signal-grid div { display: grid; gap: 5px; padding: 14px; background: #1e3147; }
+.signal-grid strong { color: var(--cyan); font: 500 24px 'DM Mono', monospace; }
+.signal-grid span { color: var(--muted); font-size: 11px; }
+@media (max-width: 720px) { .signal-grid { grid-template-columns: 1fr; } }

@@ -7,6 +7,7 @@
     <meta name="description" content="A personal command center for your day, goals, and business." />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="enhancements.css" />
     <title>JARVIS // Personal command center</title>
   </head>
   <body>
@@ -38,18 +39,25 @@
         </section>
 
         <section class="content-grid" id="app-view">
-          <article class="panel priorities-panel">
+          <article class="panel priorities-panel" data-section="overview workbench">
             <div class="panel-heading"><div><p class="eyebrow">COMMAND QUEUE</p><h2>Priority moves</h2></div><button class="text-button" id="add-task">+ Add</button></div>
             <div class="task-list" id="task-list"></div>
           </article>
 
-          <article class="panel briefing-panel">
+          <article class="panel briefing-panel" data-section="overview workbench">
             <div class="panel-heading"><div><p class="eyebrow">JARVIS BRIEFING</p><h2>What deserves your attention</h2></div><span class="ai-badge">LOCAL AI</span></div>
             <div class="briefing-copy" id="briefing-copy">Review your three priority moves, then protect the first deep-work block before opening new work.</div>
             <div class="briefing-actions"><button class="action-button" id="briefing-button">Refresh briefing</button><button class="quiet-button" id="review-button">Start daily review</button></div>
           </article>
 
-          <article class="panel agenda-panel">
+          <article class="panel assistant-panel" data-section="overview workbench">
+            <div class="panel-heading"><div><p class="eyebrow">COMMAND LINE</p><h2>Ask JARVIS</h2></div><span class="ai-badge">READY</span></div>
+            <div class="assistant-log" id="assistant-log" aria-live="polite"><div class="assistant-message assistant"><span>J</span><p>Tell me what you need. I can add tasks, show your open work, or help you choose the next move.</p></div></div>
+            <form class="assistant-form" id="assistant-form"><input id="assistant-input" autocomplete="off" placeholder="e.g. Add review business numbers" aria-label="Ask JARVIS" /><button type="submit" aria-label="Send command">↗</button></form>
+            <div class="command-chips"><button type="button" data-command="What should I do next?">Next move</button><button type="button" data-command="Show my open work">Open work</button><button type="button" data-command="Add a task to review my numbers">Add task</button></div>
+          </article>
+
+          <article class="panel agenda-panel" data-section="overview agenda">
             <div class="panel-heading"><div><p class="eyebrow">NEXT UP</p><h2>Today's agenda</h2></div><button class="text-button" data-view-target="agenda">View all</button></div>
             <div class="agenda-list">
               <div class="agenda-item"><time>09:00</time><div><strong>Deep work block</strong><span>Build the first useful slice</span></div><b class="tag blue">FOCUS</b></div>
@@ -58,14 +66,20 @@
             </div>
           </article>
 
-          <article class="panel momentum-panel">
+          <article class="panel momentum-panel" data-section="overview performance">
             <div class="panel-heading"><div><p class="eyebrow">MOMENTUM</p><h2>Small wins compound</h2></div><span class="trend">+12%</span></div>
             <div class="momentum-value">7.4<span>/10</span></div>
             <div class="sparkline" aria-label="Momentum trend"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
             <p class="muted">Your consistency is up from last week.</p>
           </article>
 
-          <article class="panel capture-panel">
+          <article class="panel performance-panel" data-section="performance">
+            <div class="panel-heading"><div><p class="eyebrow">PERFORMANCE LAB</p><h2>Signals worth watching</h2></div><span class="trend">THIS WEEK</span></div>
+            <div class="signal-grid"><div><strong id="completed-count">0</strong><span>moves completed</span></div><div><strong>04h 20m</strong><span>deep work target</span></div><div><strong>82%</strong><span>energy average</span></div></div>
+            <p class="muted">JARVIS tracks patterns to help you improve the system, not judge the person using it.</p>
+          </article>
+
+          <article class="panel capture-panel" data-section="overview workbench">
             <p class="eyebrow">QUICK CAPTURE</p>
             <h2>Get it out of your head.</h2>
             <form id="capture-form"><input id="capture-input" type="text" placeholder="A thought, task, or idea..." aria-label="Quick capture" /><select id="capture-type" aria-label="Capture type"><option value="task">Task</option><option value="idea">Idea</option><option value="business">Business</option></select><button type="submit" aria-label="Capture item">→</button></form>

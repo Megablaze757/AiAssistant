@@ -8,6 +8,8 @@ const taskList = document.querySelector('#task-list');
 const focusCount = document.querySelector('#focus-count');
 const toast = document.querySelector('#toast');
 const briefingCopy = document.querySelector('#briefing-copy');
+const assistantLog = document.querySelector('#assistant-log');
+const assistantInput = document.querySelector('#assistant-input');
 let tasks = JSON.parse(localStorage.getItem('jarvis-tasks') || 'null') || initialTasks;
 let focusTimer;
 let focusSeconds = 0;
@@ -19,6 +21,7 @@ function renderTasks() {
       <label for="task-${task.id}"><strong>${task.title}</strong><small>${task.detail}</small></label>
     </div>`).join('');
   focusCount.textContent = String(tasks.filter((task) => !task.done).length).padStart(2, '0');
+  document.querySelector('#completed-count').textContent = String(tasks.filter((task) => task.done).length).padStart(2, '0');
 }
 
 function showToast(message) {
@@ -37,6 +40,51 @@ function refreshBriefing() {
   } else {
     briefingCopy.textContent = `Start with “${openTasks[0].title}”, then protect the first deep-work block before opening new work.`;
   }
+}
+
+function addAssistantMessage(text, role) {
+  const message = document.createElement('div');
+  message.className = `assistant-message ${role}`;
+  const marker = document.createElement('span');
+  marker.textContent = role === 'assistant' ? 'J' : 'YOU';
+  const copy = document.createElement('p');
+  copy.textContent = text;
+  message.append(marker, copy);
+  assistantLog.append(message);
+  assistantLog.scrollTop = assistantLog.scrollHeight;
+}
+
+function handleAssistantCommand(command) {
+  const normalized = command.toLowerCase();
+  if (normalized.includes('add') || normalized.includes('create')) {
+    const title = command.replace(/^(add|create)(\s+a)?(\s+task)?(\s+to)?\s*/i, '').trim() || 'New JARVIS task';
+    tasks.push({ id: Date.now(), title, detail: 'Added through command line', type: normalized.includes('business') ? 'business' : 'task', done: false });
+    localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+    renderTasks();
+    refreshBriefing();
+    return `Added “${title}” to your queue.`;
+  }
+  if (normalized.includes('open') || normalized.includes('next') || normalized.includes('should')) {
+    const next = tasks.find((task) => !task.done);
+    return next ? `Your next move is “${next.title}”. ${next.detail}.` : 'Your queue is clear. This is a good moment to plan the next meaningful outcome.';
+  }
+  if (normalized.includes('complete') || normalized.includes('done')) {
+    const next = tasks.find((task) => !task.done);
+    if (!next) return 'There are no open tasks to complete.';
+    next.done = true;
+    localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+    renderTasks();
+    refreshBriefing();
+    return `Marked “${next.title}” complete. Keep the momentum intentional.`;
+  }
+  return 'I can help with your next move, open work, or adding a task. Connect the Apps Script backend for richer AI reasoning.';
+}
+
+function submitAssistantCommand(command) {
+  if (!command.trim()) return;
+  addAssistantMessage(command.trim(), 'user');
+  assistantInput.value = '';
+  window.setTimeout(() => addAssistantMessage(handleAssistantCommand(command), 'assistant'), 180);
 }
 
 taskList.addEventListener('change', (event) => {
@@ -104,7 +152,15 @@ document.querySelector('#review-button').addEventListener('click', () => {
   localStorage.setItem('jarvis-last-review', JSON.stringify({ note: note.trim(), savedAt: new Date().toISOString() }));
   showToast('Daily review saved locally.');
 });
-document.querySelectorAll('[data-view], [data-view-target]').forEach((button) => button.addEventListener('click', () => showToast(`${button.dataset.view || button.dataset.viewTarget} view is coming next.`)));
+document.querySelector('#assistant-form').addEventListener('submit', (event) => { event.preventDefault(); submitAssistantCommand(assistantInput.value); });
+document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => submitAssistantCommand(button.dataset.command)));
+document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
+  const view = button.dataset.view;
+  document.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item === button));
+  document.querySelectorAll('[data-section]').forEach((panel) => { panel.hidden = !panel.dataset.section.split(' ').includes(view); });
+  document.querySelector('#page-title').textContent = view === 'overview' ? 'Good morning, Sasha.' : `${view[0].toUpperCase()}${view.slice(1)} mode`;
+}));
+document.querySelectorAll('[data-view-target]').forEach((button) => button.addEventListener('click', () => document.querySelector(`[data-view="${button.dataset.viewTarget}"]`).click()));
 
 renderTasks();
 refreshBriefing();

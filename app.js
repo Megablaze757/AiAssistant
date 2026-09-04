@@ -68,6 +68,28 @@ function updateSyncLabel() {
   syncLabel.textContent = isConnected() ? 'Google sync connected' : 'Local demo mode';
 }
 
+function collectLocalBackup() {
+  return { version: 1, exportedAt: new Date().toISOString(), profile, tasks, metrics, reviews, socialReminders, objective, apiUrl: localStorage.getItem('jarvis-api-url') || '' };
+}
+
+function restoreLocalBackup(backup) {
+  if (!backup || backup.version !== 1) throw new Error('Unsupported backup version.');
+  profile = backup.profile || profile;
+  tasks = Array.isArray(backup.tasks) ? backup.tasks : tasks;
+  metrics = Array.isArray(backup.metrics) ? backup.metrics : metrics;
+  reviews = Array.isArray(backup.reviews) ? backup.reviews : reviews;
+  socialReminders = Array.isArray(backup.socialReminders) ? backup.socialReminders : socialReminders;
+  objective = backup.objective || objective;
+  localStorage.setItem('jarvis-profile', JSON.stringify(profile));
+  localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+  localStorage.setItem('jarvis-metrics', JSON.stringify(metrics));
+  localStorage.setItem('jarvis-reviews', JSON.stringify(reviews));
+  localStorage.setItem('jarvis-social', JSON.stringify(socialReminders));
+  localStorage.setItem('jarvis-objective', JSON.stringify(objective));
+  if (backup.apiUrl) localStorage.setItem('jarvis-api-url', backup.apiUrl);
+  renderTasks(); renderMetrics(); renderSocialReminders(); renderObjective(); loadProfileFields(); updateDate(); updateSyncLabel();
+}
+
 function renderEmails(emails = []) {
   emailList.replaceChildren();
   if (!emails.length) {
@@ -482,6 +504,26 @@ document.querySelector('#profile-form').addEventListener('submit', (event) => {
   updateDate();
   document.querySelector('#profile-dialog').close();
   showToast('Your operating context is saved.');
+});
+document.querySelector('#export-data').addEventListener('click', () => {
+  const file = new Blob([JSON.stringify(collectLocalBackup(), null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(file);
+  link.download = `jarvis-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast('Backup exported.');
+});
+document.querySelector('#import-data').addEventListener('click', () => document.querySelector('#import-file').click());
+document.querySelector('#import-file').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener('load', () => {
+    try { restoreLocalBackup(JSON.parse(reader.result)); showToast('Backup restored.'); } catch (error) { showToast('That backup could not be restored.'); }
+    event.target.value = '';
+  });
+  reader.readAsText(file);
 });
 document.querySelector('#sync-cancel').addEventListener('click', () => document.querySelector('#sync-dialog').close());
 document.querySelector('#sync-form').addEventListener('submit', async (event) => {

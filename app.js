@@ -86,10 +86,12 @@ function handleAssistantCommand(command) {
   const normalized = command.toLowerCase();
   if (normalized.includes('add') || normalized.includes('create')) {
     const title = command.replace(/^(add|create)(\s+a)?(\s+task)?(\s+to)?\s*/i, '').trim() || 'New JARVIS task';
-    tasks.push({ id: Date.now(), title, detail: 'Added through command line', type: normalized.includes('business') ? 'business' : 'task', done: false });
+    const task = { id: Date.now(), title, detail: 'Added through command line', type: normalized.includes('business') ? 'business' : 'task', done: false };
+    tasks.push(task);
     localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
     renderTasks();
     refreshBriefing();
+    if (isConnected()) saveTask(task).catch(() => showToast('Added locally. Sync will retry later.'));
     return `Added “${title}” to your queue.`;
   }
   if (normalized.includes('open') || normalized.includes('next') || normalized.includes('should')) {
@@ -103,6 +105,7 @@ function handleAssistantCommand(command) {
     localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
     renderTasks();
     refreshBriefing();
+    if (isConnected()) updateTask(next).catch(() => showToast('Completed locally. Sync will retry later.'));
     return `Marked “${next.title}” complete. Keep the momentum intentional.`;
   }
   return 'I can help with your next move, open work, or adding a task. Connect the Apps Script backend for richer AI reasoning.';

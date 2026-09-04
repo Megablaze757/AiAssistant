@@ -14,6 +14,12 @@ The V2 loop is:
 4. Execute the day with focus time and energy-aware planning.
 5. Review outcomes, training load, business signals, and what needs to change.
 
+## V3 operating layer
+
+V3 adds browser notifications for upcoming social reminders and a metric log for study hours, business revenue, training load, and sleep. These work locally immediately and sync to the `Metrics` and `Social` sheets when Google is connected.
+
+The current identity state is intentionally explicit: local mode means this browser is the identity, while Google sync means the Apps Script account is the data owner. A true sign-in screen requires a Google OAuth web client ID and authorized GitHub Pages origin; do not put a client secret in this static repository. That is the next security configuration step, not something the frontend should fake.
+
 ## Run it
 
 Open `index.html` in a browser, or serve this folder with any static file server. GitHub Pages can publish the folder directly after it is pushed to a repository.

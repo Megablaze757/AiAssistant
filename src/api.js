@@ -58,3 +58,7 @@ export async function createCalendarEvent(event) {
 export async function saveSocialReminder(reminder) {
   return sendCommand({ action: 'saveSocialReminder', ...reminder });
 }
+
+export async function saveMetric(metric) {
+  return sendCommand({ action: 'saveMetric', ...metric });
+}

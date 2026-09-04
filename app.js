@@ -1,4 +1,4 @@
-import { askAssistant, createCalendarEvent, isConnected, requestDashboard, saveCapture, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
+import { askAssistant, createCalendarEvent, isConnected, requestDashboard, saveCapture, saveMetric, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
 
 const initialTasks = [
   { id: 1, title: 'Ship the first JARVIS slice', detail: 'Build the daily command center', type: 'task', done: false },
@@ -25,6 +25,7 @@ let focusSeconds = 0;
 let pendingImage = '';
 let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
 let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sasha', university: '', business: '', training: '' };
+let metrics = JSON.parse(localStorage.getItem('jarvis-metrics') || '[]');
 
 function updateDate() {
   const now = new Date();
@@ -109,12 +110,38 @@ function renderSocialReminders() {
   });
 }
 
+function renderMetrics() {
+  const list = document.querySelector('#metric-list');
+  list.replaceChildren();
+  if (!metrics.length) { const empty = document.createElement('p'); empty.className = 'muted'; empty.textContent = 'Log a number to make progress visible.'; list.append(empty); return; }
+  metrics.slice(-5).reverse().forEach((metric) => {
+    const item = document.createElement('div');
+    item.className = 'metric-item';
+    const name = document.createElement('strong');
+    name.textContent = metric.name;
+    const value = document.createElement('span');
+    value.textContent = `${metric.value} • ${metric.area}`;
+    item.append(name, value);
+    list.append(item);
+  });
+}
+
 function applyDashboardSignals(dashboard) {
   renderEmails(dashboard?.importantEmails || []);
   if (!dashboard?.socialReminders) return;
   socialReminders = dashboard.socialReminders;
   localStorage.setItem('jarvis-social', JSON.stringify(socialReminders));
   renderSocialReminders();
+  if (dashboard.metrics) { metrics = dashboard.metrics; localStorage.setItem('jarvis-metrics', JSON.stringify(metrics)); renderMetrics(); }
+}
+
+function notifyUpcoming() {
+  if (!('Notification' in window)) { showToast('This browser does not support reminders.'); return; }
+  if (Notification.permission === 'default') { Notification.requestPermission().then((permission) => { if (permission === 'granted') notifyUpcoming(); }); return; }
+  if (Notification.permission !== 'granted') { showToast('Reminders are blocked in browser settings.'); return; }
+  const upcoming = socialReminders.find((reminder) => !reminder.done && new Date(reminder.remindAt) > new Date() && new Date(reminder.remindAt) < new Date(Date.now() + 24 * 60 * 60 * 1000));
+  new Notification('JARVIS reminders enabled', { body: upcoming ? `${upcoming.channel}: ${upcoming.topic}` : 'I will keep an eye on your upcoming posting reminders.' });
+  showToast('Browser reminders are enabled.');
 }
 
 function renderTasks() {
@@ -324,6 +351,22 @@ document.querySelector('#refresh-signals').addEventListener('click', async () =>
   if (!isConnected()) { renderEmails(); showToast('Connect Google sync to read important mail.'); return; }
   try { applyDashboardSignals(await requestDashboard()); showToast('Signals refreshed.'); } catch (error) { showToast('Could not refresh inbox signals.'); }
 });
+document.querySelector('#notify-button').addEventListener('click', notifyUpcoming);
+document.querySelector('#metric-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const name = document.querySelector('#metric-name').value.trim();
+  const value = document.querySelector('#metric-value').value;
+  const area = document.querySelector('#metric-area').value;
+  if (!name || value === '') { showToast('Add a metric name and value.'); return; }
+  const metric = { id: Date.now(), name, value: Number(value), area, unit: '', createdAt: new Date().toISOString() };
+  metrics.push(metric);
+  localStorage.setItem('jarvis-metrics', JSON.stringify(metrics));
+  renderMetrics();
+  if (isConnected()) saveMetric(metric).catch(() => showToast('Metric saved locally. Sync will retry later.'));
+  document.querySelector('#metric-name').value = '';
+  document.querySelector('#metric-value').value = '';
+  showToast('Metric logged.');
+});
 
 document.querySelector('#focus-button').addEventListener('click', () => {
   const button = document.querySelector('#focus-button');
@@ -434,6 +477,7 @@ renderTasks();
 refreshBriefing();
 renderEmails();
 renderSocialReminders();
+renderMetrics();
 updateDate();
 loadProfileFields();
 updateSyncLabel();

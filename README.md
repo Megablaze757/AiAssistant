@@ -2,6 +2,10 @@
 
 A dependency-free first slice of a personal assistant designed for GitHub Pages and iPhone Safari. It currently runs in local demo mode and stores the command queue in browser `localStorage`.
 
+## Launch without an AI token
+
+Yes. The app launches and remains useful without any token. Local mode supports tasks, priorities, due dates, focus sessions, weekly objectives, metrics, reviews, social reminders, and offline storage. Apps Script can also provide Calendar/Gmail/Sheets access after its Google permissions are approved. `GEMINI_API_KEY` is optional: it enables screenshot understanding, timetable extraction, homework parsing, and deeper reasoning. Without it, Apps Script returns a small token-free text fallback instead of failing.
+
 ## V2 operating model
 
 V2 treats JARVIS as a personal operating system rather than a task list. Your local operating context includes university/course, business focus, and training focus. The assistant receives that context when connected so a timetable, deadline, workout, or business message can be interpreted against the rest of your life. The daily agenda uses Google Calendar events when sync is connected and falls back to a usable local plan otherwise.

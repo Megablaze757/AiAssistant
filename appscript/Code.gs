@@ -235,8 +235,8 @@ function syncPocketAthleteWorkout_(request) {
 
 function askAssistant_(request) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  if (!key) throw new Error('Add GEMINI_API_KEY in Apps Script project settings first.');
   const message = required_(request.message, 'message');
+  if (!key) return localAssistantFallback_(message, request.image);
   const context = request.context || {};
   const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. User context: ${JSON.stringify(context)}. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal","priority":"high|medium|low","dueAt":"ISO 8601 or empty"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
   if (request.image) {
@@ -253,6 +253,17 @@ function askAssistant_(request) {
   const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Gemini returned no assistant response.');
   return JSON.parse(text.replace(/^```json\s*/, '').replace(/\s*```$/, ''));
+}
+
+function localAssistantFallback_(message, image) {
+  if (image) return { reply: 'This deployment is running without an AI token, so I cannot read images yet. Text commands, tasks, Calendar, Gmail signals, and reviews still work.', questions: ['Add GEMINI_API_KEY later to enable timetable and homework screenshot understanding.'], tasks: [], events: [], mode: 'local' };
+  const lowerMessage = message.toLowerCase();
+  const isTaskRequest = lowerMessage.indexOf('add') >= 0 || lowerMessage.indexOf('create') >= 0;
+  if (isTaskRequest) {
+    const title = message.replace(/^(add|create)(\s+a)?(\s+task)?(\s+to)?\s*/i, '').trim() || 'New JARVIS task';
+    return { reply: `I prepared a local task from: ${title}`, questions: [], tasks: [{ title: title, detail: 'Prepared by token-free JARVIS mode', type: 'personal', priority: 'medium', dueAt: '' }], events: [], mode: 'local' };
+  }
+  return { reply: 'Token-free mode is active. I can still save tasks, reviews, metrics, reminders, and Calendar data. Add GEMINI_API_KEY when you want screenshot understanding and deeper reasoning.', questions: [], tasks: [], events: [], mode: 'local' };
 }
 
 function saveSocialReminder_(request) {

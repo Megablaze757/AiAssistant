@@ -28,7 +28,7 @@ export async function savePulse(energy) {
 }
 
 export async function saveTask(task) {
-  return sendCommand({ action: 'addTask', title: task.title, detail: task.detail, type: task.type });
+  return sendCommand({ action: 'addTask', title: task.title, detail: task.detail, type: task.type, priority: task.priority, dueAt: task.dueAt });
 }
 
 export async function updateTask(task) {

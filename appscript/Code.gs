@@ -26,7 +26,7 @@ const SHEETS = {
 
 function setupJarvis() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  createSheet_(spreadsheet, SHEETS.tasks, ['id', 'title', 'detail', 'type', 'done', 'createdAt', 'completedAt']);
+  createSheet_(spreadsheet, SHEETS.tasks, ['id', 'title', 'detail', 'type', 'priority', 'dueAt', 'done', 'createdAt', 'completedAt']);
   createSheet_(spreadsheet, SHEETS.captures, ['id', 'text', 'type', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.reviews, ['id', 'note', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.pulses, ['id', 'energy', 'note', 'createdAt']);
@@ -74,6 +74,8 @@ function getDashboard_() {
     title: row.title,
     detail: row.detail,
     type: row.type,
+    priority: row.priority || 'medium',
+    dueAt: row.dueAt || '',
     done: row.done === true || row.done === 'TRUE',
     createdAt: row.createdAt,
     completedAt: row.completedAt
@@ -96,6 +98,8 @@ function addTask_(request) {
     title: required_(request.title, 'title'),
     detail: request.detail || '',
     type: request.type || 'task',
+    priority: request.priority || 'medium',
+    dueAt: request.dueAt || '',
     done: false,
     createdAt: new Date().toISOString(),
     completedAt: ''
@@ -108,10 +112,17 @@ function completeTask_(request) {
   const id = required_(request.id, 'id');
   const sheet = getSheet_(SHEETS.tasks);
   const values = sheet.getDataRange().getValues();
+  const headers = values[0].map((header) => String(header));
+  const doneColumn = headers.indexOf('done');
+  const createdColumn = headers.indexOf('createdAt');
+  const completedColumn = headers.indexOf('completedAt');
+  if (doneColumn < 0 || completedColumn < 0) throw new Error('Tasks sheet is missing completion columns. Run setupJarvis again.');
   for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
     if (String(values[rowIndex][0]) !== String(id)) continue;
     const done = request.done === true || request.done === 'true';
-    sheet.getRange(rowIndex + 1, 5, 1, 3).setValues([[done, values[rowIndex][5], done ? new Date().toISOString() : '']]);
+    sheet.getRange(rowIndex + 1, doneColumn + 1).setValue(done);
+    if (createdColumn >= 0) sheet.getRange(rowIndex + 1, createdColumn + 1).setValue(values[rowIndex][createdColumn]);
+    sheet.getRange(rowIndex + 1, completedColumn + 1).setValue(done ? new Date().toISOString() : '');
     return { id: id, done: done };
   }
   throw new Error('Task not found.');
@@ -141,7 +152,9 @@ function createCalendarEvent_(request) {
 
 function createSheet_(spreadsheet, name, headers) {
   const sheet = spreadsheet.getSheetByName(name) || spreadsheet.insertSheet(name);
-  if (sheet.getLastRow() === 0) sheet.appendRow(headers);
+  if (sheet.getLastRow() === 0) { sheet.appendRow(headers); return; }
+  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map((header) => String(header));
+  headers.filter((header) => !currentHeaders.includes(header)).forEach((header) => sheet.getRange(1, sheet.getLastColumn() + 1).setValue(header));
 }
 
 function getSpreadsheet_() {
@@ -225,7 +238,7 @@ function askAssistant_(request) {
   if (!key) throw new Error('Add GEMINI_API_KEY in Apps Script project settings first.');
   const message = required_(request.message, 'message');
   const context = request.context || {};
-  const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. User context: ${JSON.stringify(context)}. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
+  const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. User context: ${JSON.stringify(context)}. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal","priority":"high|medium|low","dueAt":"ISO 8601 or empty"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
   if (request.image) {
     const imageParts = request.image.split(',');
     if (imageParts.length !== 2) throw new Error('Image attachment format is invalid.');

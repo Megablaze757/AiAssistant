@@ -20,6 +20,8 @@ V3 adds browser notifications for upcoming social reminders and a metric log for
 
 The current identity state is intentionally explicit: local mode means this browser is the identity, while Google sync means the Apps Script account is the data owner. A true sign-in screen requires a Google OAuth web client ID and authorized GitHub Pages origin; do not put a client secret in this static repository. That is the next security configuration step, not something the frontend should fake.
 
+When updating an existing Apps Script deployment, run `setupJarvis` again once. It now adds missing V3 columns to existing sheets instead of requiring a new spreadsheet.
+
 ## Run it
 
 Open `index.html` in a browser, or serve this folder with any static file server. GitHub Pages can publish the folder directly after it is pushed to a repository.

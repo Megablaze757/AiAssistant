@@ -126,6 +126,12 @@ function renderMetrics() {
   });
 }
 
+function createTaskFromForm() {
+  const title = document.querySelector('#task-title').value.trim();
+  if (!title) return null;
+  return { id: Date.now(), title, detail: 'Added from command queue', type: document.querySelector('#task-type').value, priority: document.querySelector('#task-priority').value, dueAt: document.querySelector('#task-due').value, done: false };
+}
+
 function applyDashboardSignals(dashboard) {
   renderEmails(dashboard?.importantEmails || []);
   if (!dashboard?.socialReminders) return;
@@ -158,8 +164,12 @@ function renderTasks() {
     const title = document.createElement('strong');
     title.textContent = task.title;
     const detail = document.createElement('small');
-    detail.textContent = task.detail;
-    label.append(title, detail);
+    const due = task.dueAt ? `Due ${new Date(task.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : task.detail;
+    detail.textContent = due;
+    const badge = document.createElement('em');
+    badge.className = `priority ${task.priority || 'medium'}`;
+    badge.textContent = task.priority || 'medium';
+    label.append(title, detail, badge);
     item.append(checkbox, label);
     return item;
   }));
@@ -201,7 +211,7 @@ function handleAssistantCommand(command) {
   const normalized = command.toLowerCase();
   if (normalized.includes('add') || normalized.includes('create')) {
     const title = command.replace(/^(add|create)(\s+a)?(\s+task)?(\s+to)?\s*/i, '').trim() || 'New JARVIS task';
-    const task = { id: Date.now(), title, detail: 'Added through command line', type: normalized.includes('business') ? 'business' : 'task', done: false };
+    const task = { id: Date.now(), title, detail: 'Added through command line', type: normalized.includes('business') ? 'business' : 'task', priority: 'medium', dueAt: '', done: false };
     tasks.push(task);
     localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
     renderTasks();
@@ -248,7 +258,7 @@ function renderAssistantProposals(result) {
     action.addEventListener('click', async () => {
       action.disabled = true;
       if (proposal.kind === 'task') {
-        const task = { id: Date.now(), title: proposal.title, detail: proposal.detail || 'Suggested by JARVIS', type: proposal.type || 'task', done: false };
+        const task = { id: Date.now(), title: proposal.title, detail: proposal.detail || 'Suggested by JARVIS', type: proposal.type || 'task', priority: proposal.priority || 'medium', dueAt: proposal.dueAt || '', done: false };
         tasks.push(task);
         localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
         renderTasks();
@@ -290,8 +300,8 @@ async function submitAssistantCommand(command) {
 }
 
 taskList.addEventListener('change', (event) => {
-  const id = Number(event.target.dataset.taskId);
-  const task = tasks.find((item) => item.id === id);
+  const id = String(event.target.dataset.taskId);
+  const task = tasks.find((item) => String(item.id) === id);
   if (!task) return;
   task.done = event.target.checked;
   localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
@@ -300,14 +310,18 @@ taskList.addEventListener('change', (event) => {
   showToast(task.done ? 'Move completed.' : 'Move restored.');
 });
 
-document.querySelector('#add-task').addEventListener('click', () => {
-  const title = window.prompt('What needs your attention?');
-  if (!title?.trim()) return;
-  const task = { id: Date.now(), title: title.trim(), detail: 'Captured from your command center', type: 'task', done: false };
+document.querySelector('#add-task').addEventListener('click', () => document.querySelector('#task-dialog').showModal());
+document.querySelector('#task-cancel').addEventListener('click', () => document.querySelector('#task-dialog').close());
+document.querySelector('#task-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const task = createTaskFromForm();
+  if (!task) return;
   tasks.push(task);
   localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
   renderTasks();
   if (isConnected()) saveTask(task).catch(() => showToast('Added locally. Sync will retry later.'));
+  document.querySelector('#task-form').reset();
+  document.querySelector('#task-dialog').close();
   showToast('Added to your command queue.');
 });
 

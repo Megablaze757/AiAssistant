@@ -122,6 +122,14 @@
         <div class="dialog-actions"><button type="button" class="quiet-button" id="sync-cancel">Cancel</button><button type="submit" class="action-button">Connect</button></div>
       </form>
     </dialog>
+    <dialog class="sync-dialog task-dialog" id="task-dialog">
+      <form method="dialog" id="task-form">
+        <p class="eyebrow">COMMAND QUEUE</p>
+        <h2>Add a priority move</h2>
+        <div class="profile-grid"><label for="task-title">Task<input id="task-title" required placeholder="What needs to move?" /></label><label for="task-type">Area<select id="task-type"><option value="study">University</option><option value="training">Training</option><option value="coding">Coding</option><option value="business">Business</option><option value="personal">Personal</option></select></label><label for="task-priority">Priority<select id="task-priority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></label><label for="task-due">Due<input id="task-due" type="datetime-local" /></label></div>
+        <div class="dialog-actions"><button type="button" class="quiet-button" id="task-cancel">Cancel</button><button type="submit" class="action-button">Add move</button></div>
+      </form>
+    </dialog>
     <dialog class="sync-dialog profile-dialog" id="profile-dialog">
       <form method="dialog" id="profile-form">
         <p class="eyebrow">YOUR OPERATING CONTEXT</p>

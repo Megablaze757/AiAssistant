@@ -1,4 +1,12 @@
 [hidden] { display: none !important; }
+.hero-note { max-width: 600px; margin: 10px 0 0; color: #a9c0cd; font-size: 12px; line-height: 1.5; }
+.hero-action { display: block; margin-top: 12px; padding: 7px 10px; border: 1px solid var(--cyan); background: transparent; color: var(--cyan); font-size: 11px; }
+.life-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+.life-card { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-content: start; min-height: 150px; padding: 18px; border: 1px solid var(--line); background: #16283b; color: var(--ink); text-align: left; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
+.life-card:hover, .life-card:focus-visible { transform: translateY(-2px); border-color: var(--cyan); background: #1d3449; }
+.life-icon { grid-row: span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #254b57; color: var(--cyan); font-size: 19px; }
+.life-card .eyebrow { align-self: center; }.life-card strong { grid-column: 1 / -1; margin-top: 20px; font-size: 15px; }.life-card b { grid-column: 1 / -1; margin-top: 14px; color: var(--cyan); font: 500 23px 'DM Mono', monospace; }.life-card small { grid-column: 1 / -1; margin-top: 4px; color: var(--muted); font-size: 11px; }.life-card.training .life-icon { color: var(--orange); background: #4a3b37; }.life-card.build .life-icon { color: var(--green); background: #30483e; }.life-card.business .life-icon { color: #d4b6ff; background: #3d3450; }.life-card.training b { color: var(--orange); }.life-card.build b { color: var(--green); }.life-card.business b { color: #d4b6ff; }
+.pulse-panel { grid-column: 1 / -1; }.pulse-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }.pulse-actions button { padding: 8px 11px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 11px; }.pulse-actions button:hover, .pulse-actions button:focus-visible { border-color: var(--cyan); color: var(--ink); }
 .assistant-panel, .performance-panel { grid-column: 1 / -1; }
 .assistant-log { display: grid; gap: 9px; max-height: 190px; overflow: auto; margin-bottom: 14px; }
 .assistant-message { display: flex; align-items: start; gap: 9px; max-width: 720px; }
@@ -17,4 +25,6 @@
 .signal-grid div { display: grid; gap: 5px; padding: 14px; background: #1e3147; }
 .signal-grid strong { color: var(--cyan); font: 500 24px 'DM Mono', monospace; }
 .signal-grid span { color: var(--muted); font-size: 11px; }
-@media (max-width: 720px) { .signal-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .life-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .life-grid { grid-template-columns: 1fr 1fr; gap: 8px; }.life-card { min-height: 135px; padding: 14px; }.life-card strong { margin-top: 14px; font-size: 13px; }.life-card b { margin-top: 10px; font-size: 19px; }.hero-note { display: none; }.signal-grid { grid-template-columns: 1fr; } }
+@media (max-width: 390px) { .life-grid { grid-template-columns: 1fr; } }

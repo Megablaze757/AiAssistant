@@ -27,15 +27,22 @@
       <main class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow">THURSDAY, SEPTEMBER 4, 2026</p>
+            <p class="eyebrow" id="current-date">THURSDAY, SEPTEMBER 4, 2026</p>
             <h1 id="page-title">Good morning, Sasha.</h1>
           </div>
           <button class="icon-button" id="focus-button" aria-label="Start a 25 minute focus session" title="Start a 25 minute focus session">◉</button>
         </header>
 
         <section class="hero-strip" aria-label="Daily focus">
-          <div><p class="eyebrow">TODAY'S OPERATING MODE</p><h2>Make the important thing easy to start.</h2></div>
-          <div class="hero-stat"><strong id="focus-count">03</strong><span>priority moves</span></div>
+          <div><p class="eyebrow">TODAY'S OPERATING MODE</p><h2 id="hero-message">Make the important thing easy to start.</h2><p class="hero-note">JARVIS is balancing study, training, code, and the business around your available energy.</p></div>
+          <div class="hero-stat"><strong id="focus-count">03</strong><span>priority moves</span><button class="hero-action" id="plan-day">Plan my day</button></div>
+        </section>
+
+        <section class="life-grid" aria-label="Life domains">
+          <button class="life-card study" data-view-target="agenda"><span class="life-icon">⌁</span><span class="eyebrow">UNIVERSITY</span><strong>Study runway</strong><b>03h 20m</b><small>2 focused blocks planned</small></button>
+          <button class="life-card training" data-view-target="workbench"><span class="life-icon">+</span><span class="eyebrow">TRAINING</span><strong>Push session</strong><b>04 / 05</b><small>Weekly consistency</small></button>
+          <button class="life-card build" data-view-target="workbench"><span class="life-icon">⌘</span><span class="eyebrow">BUILD</span><strong>Code momentum</strong><b>72%</b><small>One release moving forward</small></button>
+          <button class="life-card business" data-view-target="performance"><span class="life-icon">↗</span><span class="eyebrow">BUSINESS</span><strong>Weekly signal</strong><b>On track</b><small>Review metrics this afternoon</small></button>
         </section>
 
         <section class="content-grid" id="app-view">
@@ -64,6 +71,12 @@
               <div class="agenda-item"><time>13:30</time><div><strong>Business review</strong><span>Check weekly performance signals</span></div><b class="tag orange">REVIEW</b></div>
               <div class="agenda-item"><time>18:00</time><div><strong>Reset and plan</strong><span>Close loops before tomorrow</span></div><b class="tag green">PERSONAL</b></div>
             </div>
+          </article>
+
+          <article class="panel pulse-panel" data-section="overview agenda performance">
+            <div class="panel-heading"><div><p class="eyebrow">DAILY PULSE</p><h2>How are you arriving?</h2></div><span class="ai-badge" id="pulse-status">NOT LOGGED</span></div>
+            <p class="muted">A useful plan starts with the person, not the backlog.</p>
+            <div class="pulse-actions"><button type="button" data-pulse="low">Low battery</button><button type="button" data-pulse="steady">Steady</button><button type="button" data-pulse="sharp">Sharp</button></div>
           </article>
 
           <article class="panel momentum-panel" data-section="overview performance">

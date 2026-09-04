@@ -1,3 +1,5 @@
+import { isConnected, requestDashboard, saveCapture, savePulse, saveReview, saveTask, updateTask } from './src/api.js';
+
 const initialTasks = [
   { id: 1, title: 'Ship the first JARVIS slice', detail: 'Build the daily command center', type: 'task', done: false },
   { id: 2, title: 'Review this week\'s numbers', detail: 'Revenue, energy, and learning', type: 'business', done: false },
@@ -10,16 +12,37 @@ const toast = document.querySelector('#toast');
 const briefingCopy = document.querySelector('#briefing-copy');
 const assistantLog = document.querySelector('#assistant-log');
 const assistantInput = document.querySelector('#assistant-input');
+const pulseStatus = document.querySelector('#pulse-status');
 let tasks = JSON.parse(localStorage.getItem('jarvis-tasks') || 'null') || initialTasks;
 let focusTimer;
 let focusSeconds = 0;
 
+function updateDate() {
+  const now = new Date();
+  document.querySelector('#current-date').textContent = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now).toUpperCase();
+  const hour = now.getHours();
+  document.querySelector('#page-title').textContent = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, Sasha.`;
+}
+
 function renderTasks() {
-  taskList.innerHTML = tasks.map((task) => `
-    <div class="task ${task.done ? 'done' : ''}">
-      <input type="checkbox" id="task-${task.id}" data-task-id="${task.id}" ${task.done ? 'checked' : ''}>
-      <label for="task-${task.id}"><strong>${task.title}</strong><small>${task.detail}</small></label>
-    </div>`).join('');
+  taskList.replaceChildren(...tasks.map((task) => {
+    const item = document.createElement('div');
+    item.className = `task ${task.done ? 'done' : ''}`;
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `task-${task.id}`;
+    checkbox.dataset.taskId = task.id;
+    checkbox.checked = task.done;
+    const label = document.createElement('label');
+    label.htmlFor = checkbox.id;
+    const title = document.createElement('strong');
+    title.textContent = task.title;
+    const detail = document.createElement('small');
+    detail.textContent = task.detail;
+    label.append(title, detail);
+    item.append(checkbox, label);
+    return item;
+  }));
   focusCount.textContent = String(tasks.filter((task) => !task.done).length).padStart(2, '0');
   document.querySelector('#completed-count').textContent = String(tasks.filter((task) => task.done).length).padStart(2, '0');
 }
@@ -94,15 +117,18 @@ taskList.addEventListener('change', (event) => {
   task.done = event.target.checked;
   localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
   renderTasks();
+  if (isConnected()) updateTask(task).catch(() => showToast('Updated locally. Sync will retry later.'));
   showToast(task.done ? 'Move completed.' : 'Move restored.');
 });
 
 document.querySelector('#add-task').addEventListener('click', () => {
   const title = window.prompt('What needs your attention?');
   if (!title?.trim()) return;
-  tasks.push({ id: Date.now(), title: title.trim(), detail: 'Captured from your command center', type: 'task', done: false });
+  const task = { id: Date.now(), title: title.trim(), detail: 'Captured from your command center', type: 'task', done: false };
+  tasks.push(task);
   localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
   renderTasks();
+  if (isConnected()) saveTask(task).catch(() => showToast('Added locally. Sync will retry later.'));
   showToast('Added to your command queue.');
 });
 
@@ -112,9 +138,11 @@ document.querySelector('#capture-form').addEventListener('submit', (event) => {
   const type = document.querySelector('#capture-type').value;
   if (!input.value.trim()) return;
   tasks.push({ id: Date.now(), title: input.value.trim(), detail: `Quick capture • ${type}`, type, done: false });
+  const capturedText = input.value.trim();
   localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
   input.value = '';
   renderTasks();
+  if (isConnected()) saveCapture(capturedText, type).catch(() => showToast('Captured locally. Sync will retry later.'));
   showToast('Captured. It is now in your queue.');
 });
 
@@ -150,7 +178,21 @@ document.querySelector('#review-button').addEventListener('click', () => {
   const note = window.prompt('Daily shutdown: what moved forward, what mattered, and what is next?');
   if (!note?.trim()) return;
   localStorage.setItem('jarvis-last-review', JSON.stringify({ note: note.trim(), savedAt: new Date().toISOString() }));
+  if (isConnected()) saveReview(note.trim()).catch(() => showToast('Review saved locally. Sync will retry later.'));
   showToast('Daily review saved locally.');
+});
+document.querySelectorAll('[data-pulse]').forEach((button) => button.addEventListener('click', () => {
+  const pulse = button.dataset.pulse;
+  localStorage.setItem('jarvis-pulse', JSON.stringify({ pulse, savedAt: new Date().toISOString() }));
+  pulseStatus.textContent = pulse.toUpperCase();
+  if (isConnected()) savePulse(pulse).catch(() => showToast('Saved locally. Sync will retry when the backend returns.'));
+  showToast(`Pulse logged: ${pulse}. Your plan can adapt around it.`);
+}));
+document.querySelector('#plan-day').addEventListener('click', () => {
+  const pulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null')?.pulse;
+  const message = pulse === 'low' ? 'Low-energy plan: one essential study block, a lighter training session, and an early shutdown.' : pulse === 'sharp' ? 'High-energy plan: protect deep code work first, then use the afternoon for business decisions.' : 'Balanced plan: study first, train later, and leave one clean block for the business.';
+  document.querySelector('#hero-message').textContent = message;
+  showToast('Your day has been shaped around your current energy.');
 });
 document.querySelector('#assistant-form').addEventListener('submit', (event) => { event.preventDefault(); submitAssistantCommand(assistantInput.value); });
 document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => submitAssistantCommand(button.dataset.command)));
@@ -164,3 +206,16 @@ document.querySelectorAll('[data-view-target]').forEach((button) => button.addEv
 
 renderTasks();
 refreshBriefing();
+updateDate();
+const savedPulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null');
+if (savedPulse) pulseStatus.textContent = savedPulse.pulse.toUpperCase();
+
+if (isConnected()) {
+  requestDashboard().then((dashboard) => {
+    if (!dashboard?.tasks) return;
+    tasks = dashboard.tasks;
+    localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+    renderTasks();
+    refreshBriefing();
+  }).catch(() => showToast('Offline mode active. Local data is safe.'));
+}

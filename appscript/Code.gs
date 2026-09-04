@@ -17,7 +17,10 @@
 const SHEETS = {
   tasks: 'Tasks',
   captures: 'Captures',
-  reviews: 'Reviews'
+  reviews: 'Reviews',
+  pulses: 'Pulses',
+  workouts: 'Workouts',
+  metrics: 'Metrics'
 };
 
 function setupJarvis() {
@@ -25,6 +28,9 @@ function setupJarvis() {
   createSheet_(spreadsheet, SHEETS.tasks, ['id', 'title', 'detail', 'type', 'done', 'createdAt', 'completedAt']);
   createSheet_(spreadsheet, SHEETS.captures, ['id', 'text', 'type', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.reviews, ['id', 'note', 'createdAt']);
+  createSheet_(spreadsheet, SHEETS.pulses, ['id', 'energy', 'note', 'createdAt']);
+  createSheet_(spreadsheet, SHEETS.workouts, ['id', 'name', 'durationMinutes', 'intensity', 'notes', 'createdAt']);
+  createSheet_(spreadsheet, SHEETS.metrics, ['id', 'area', 'name', 'value', 'unit', 'createdAt']);
   PropertiesService.getScriptProperties().setProperty('JARVIS_SHEET_ID', spreadsheet.getId());
   return json_({ ok: true, message: 'JARVIS is ready.' });
 }
@@ -47,6 +53,10 @@ function doPost(event) {
     if (action === 'completeTask') return json_({ ok: true, task: completeTask_(request) });
     if (action === 'capture') return json_({ ok: true, capture: addCapture_(request) });
     if (action === 'saveReview') return json_({ ok: true, review: saveReview_(request) });
+    if (action === 'savePulse') return json_({ ok: true, pulse: savePulse_(request) });
+    if (action === 'logWorkout') return json_({ ok: true, workout: logWorkout_(request) });
+    if (action === 'syncPocketAthleteWorkout') return json_({ ok: true, workout: syncPocketAthleteWorkout_(request) });
+    if (action === 'saveMetric') return json_({ ok: true, metric: saveMetric_(request) });
     if (action === 'createCalendarEvent') return json_({ ok: true, event: createCalendarEvent_(request) });
     throw new Error('Unknown action.');
   } catch (error) {
@@ -73,7 +83,7 @@ function getDashboard_() {
     end: item.getEndTime().toISOString(),
     location: item.getLocation()
   }));
-  return { ok: true, tasks: tasks, calendar: calendar, lastReview: latestRow_(SHEETS.reviews) };
+  return { ok: true, tasks: tasks, calendar: calendar, lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics) };
 }
 
 function addTask_(request) {
@@ -172,4 +182,36 @@ function required_(value, name) {
 
 function json_(value) {
   return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function savePulse_(request) {
+  const pulse = { id: Utilities.getUuid(), energy: required_(request.energy, 'energy'), note: request.note || '', createdAt: new Date().toISOString() };
+  appendRow_(SHEETS.pulses, pulse);
+  return pulse;
+}
+
+function logWorkout_(request) {
+  const workout = { id: Utilities.getUuid(), name: required_(request.name, 'name'), durationMinutes: request.durationMinutes || '', intensity: request.intensity || '', notes: request.notes || '', createdAt: new Date().toISOString() };
+  appendRow_(SHEETS.workouts, workout);
+  return workout;
+}
+
+function saveMetric_(request) {
+  const metric = { id: Utilities.getUuid(), area: required_(request.area, 'area'), name: required_(request.name, 'name'), value: required_(request.value, 'value'), unit: request.unit || '', createdAt: new Date().toISOString() };
+  appendRow_(SHEETS.metrics, metric);
+  return metric;
+}
+
+function syncPocketAthleteWorkout_(request) {
+  const workout = {
+    id: request.sourceId || Utilities.getUuid(),
+    name: required_(request.name, 'name'),
+    durationMinutes: request.durationMinutes || '',
+    intensity: request.intensity || '',
+    notes: request.notes ? `PocketAthlete: ${request.notes}` : 'Imported from PocketAthlete',
+    createdAt: request.createdAt || new Date().toISOString()
+  };
+  const existing = readRows_(SHEETS.workouts).some((row) => String(row.id) === String(workout.id));
+  if (!existing) appendRow_(SHEETS.workouts, workout);
+  return workout;
 }

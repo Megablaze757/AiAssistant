@@ -18,4 +18,10 @@ JARVIS should be better for one person by being more personal and more transpare
 4. Performance tracking that measures outcomes and energy, not just completed tasks.
 5. A daily shutdown that turns unfinished work into a deliberate next step instead of guilt.
 
+For Sasha specifically, the core object is not a generic task. It is a **day** with available energy, academic commitments, training load, coding output, business outcomes, and recovery. The app should recommend tradeoffs across those areas rather than reward filling every empty minute.
+
+## PocketAthlete
+
+PocketAthlete publicly describes readiness, sleep, soreness, training load, workouts, personal records, position-specific plans, and on-device video analysis. That makes it the specialist training system in the stack. JARVIS should not duplicate its coaching logic. It should use PocketAthlete's official export/API, once available, to answer a different question: given today's readiness and training load, what is the smartest overall day across university, gym, coding, business, and recovery?
+
 The current frontend implements local briefing, categorized capture, focus mode, and daily shutdown. Calendar scheduling, Gemini-backed reasoning, and synced analytics should be added only after the Apps Script request/response contract is available.

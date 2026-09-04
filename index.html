@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101c2c" />
+    <meta name="description" content="A personal command center for your day, goals, and business." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>JARVIS // Personal command center</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">J</span><span>JARVIS</span></div>
+        <p class="eyebrow">PERSONAL COMMAND CENTER</p>
+        <nav aria-label="Primary navigation">
+          <button class="nav-item active" data-view="overview"><span>◈</span> Overview</button>
+          <button class="nav-item" data-view="agenda"><span>◷</span> Agenda</button>
+          <button class="nav-item" data-view="workbench"><span>⌘</span> Workbench</button>
+          <button class="nav-item" data-view="performance"><span>↗</span> Performance</button>
+        </nav>
+        <div class="sidebar-foot"><span class="status-dot"></span><span>Local demo mode</span></div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">THURSDAY, SEPTEMBER 4, 2026</p>
+            <h1 id="page-title">Good morning, Sasha.</h1>
+          </div>
+          <button class="icon-button" id="focus-button" aria-label="Start a 25 minute focus session" title="Start a 25 minute focus session">◉</button>
+        </header>
+
+        <section class="hero-strip" aria-label="Daily focus">
+          <div><p class="eyebrow">TODAY'S OPERATING MODE</p><h2>Make the important thing easy to start.</h2></div>
+          <div class="hero-stat"><strong id="focus-count">03</strong><span>priority moves</span></div>
+        </section>
+
+        <section class="content-grid" id="app-view">
+          <article class="panel priorities-panel">
+            <div class="panel-heading"><div><p class="eyebrow">COMMAND QUEUE</p><h2>Priority moves</h2></div><button class="text-button" id="add-task">+ Add</button></div>
+            <div class="task-list" id="task-list"></div>
+          </article>
+
+          <article class="panel briefing-panel">
+            <div class="panel-heading"><div><p class="eyebrow">JARVIS BRIEFING</p><h2>What deserves your attention</h2></div><span class="ai-badge">LOCAL AI</span></div>
+            <div class="briefing-copy" id="briefing-copy">Review your three priority moves, then protect the first deep-work block before opening new work.</div>
+            <div class="briefing-actions"><button class="action-button" id="briefing-button">Refresh briefing</button><button class="quiet-button" id="review-button">Start daily review</button></div>
+          </article>
+
+          <article class="panel agenda-panel">
+            <div class="panel-heading"><div><p class="eyebrow">NEXT UP</p><h2>Today's agenda</h2></div><button class="text-button" data-view-target="agenda">View all</button></div>
+            <div class="agenda-list">
+              <div class="agenda-item"><time>09:00</time><div><strong>Deep work block</strong><span>Build the first useful slice</span></div><b class="tag blue">FOCUS</b></div>
+              <div class="agenda-item"><time>13:30</time><div><strong>Business review</strong><span>Check weekly performance signals</span></div><b class="tag orange">REVIEW</b></div>
+              <div class="agenda-item"><time>18:00</time><div><strong>Reset and plan</strong><span>Close loops before tomorrow</span></div><b class="tag green">PERSONAL</b></div>
+            </div>
+          </article>
+
+          <article class="panel momentum-panel">
+            <div class="panel-heading"><div><p class="eyebrow">MOMENTUM</p><h2>Small wins compound</h2></div><span class="trend">+12%</span></div>
+            <div class="momentum-value">7.4<span>/10</span></div>
+            <div class="sparkline" aria-label="Momentum trend"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <p class="muted">Your consistency is up from last week.</p>
+          </article>
+
+          <article class="panel capture-panel">
+            <p class="eyebrow">QUICK CAPTURE</p>
+            <h2>Get it out of your head.</h2>
+            <form id="capture-form"><input id="capture-input" type="text" placeholder="A thought, task, or idea..." aria-label="Quick capture" /><select id="capture-type" aria-label="Capture type"><option value="task">Task</option><option value="idea">Idea</option><option value="business">Business</option></select><button type="submit" aria-label="Capture item">→</button></form>
+          </article>
+        </section>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "JARVIS Personal Command Center",
+  "short_name": "JARVIS",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#101c2c",
+  "theme_color": "#101c2c",
+  "description": "A private personal assistant for your day, goals, and business."
+}

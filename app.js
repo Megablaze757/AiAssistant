@@ -27,6 +27,7 @@ let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
 let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sasha', university: '', business: '', training: '' };
 let metrics = JSON.parse(localStorage.getItem('jarvis-metrics') || '[]');
 let objective = JSON.parse(localStorage.getItem('jarvis-objective') || 'null');
+let reviews = JSON.parse(localStorage.getItem('jarvis-reviews') || '[]');
 
 function updateDate() {
   const now = new Date();
@@ -437,10 +438,20 @@ document.querySelector('#focus-button').addEventListener('click', () => {
 });
 document.querySelector('#briefing-button').addEventListener('click', () => { refreshBriefing(); showToast('Briefing refreshed from your local queue.'); });
 document.querySelector('#review-button').addEventListener('click', () => {
-  const note = window.prompt('Daily shutdown: what moved forward, what mattered, and what is next?');
-  if (!note?.trim()) return;
-  localStorage.setItem('jarvis-last-review', JSON.stringify({ note: note.trim(), savedAt: new Date().toISOString() }));
-  if (isConnected()) saveReview(note.trim()).catch(() => showToast('Review saved locally. Sync will retry later.'));
+  document.querySelector('#review-dialog').showModal();
+});
+document.querySelector('#review-cancel').addEventListener('click', () => document.querySelector('#review-dialog').close());
+document.querySelector('#review-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const note = document.querySelector('#review-note').value.trim();
+  if (!note) return;
+  const review = { note, savedAt: new Date().toISOString() };
+  reviews.push(review);
+  localStorage.setItem('jarvis-reviews', JSON.stringify(reviews.slice(-30)));
+  localStorage.setItem('jarvis-last-review', JSON.stringify(review));
+  if (isConnected()) saveReview(note).catch(() => showToast('Review saved locally. Sync will retry later.'));
+  document.querySelector('#review-form').reset();
+  document.querySelector('#review-dialog').close();
   showToast('Daily review saved locally.');
 });
 document.querySelectorAll('[data-pulse]').forEach((button) => button.addEventListener('click', () => {

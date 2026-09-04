@@ -30,7 +30,7 @@
             <p class="eyebrow" id="current-date">THURSDAY, SEPTEMBER 4, 2026</p>
             <h1 id="page-title">Good morning, Sasha.</h1>
           </div>
-          <button class="icon-button" id="focus-button" aria-label="Start a 25 minute focus session" title="Start a 25 minute focus session">◉</button>
+          <div class="top-actions"><button class="icon-button" id="profile-button" aria-label="Open profile settings" title="Profile settings">◎</button><button class="icon-button" id="focus-button" aria-label="Start a 25 minute focus session" title="Start a 25 minute focus session">◉</button></div>
         </header>
 
         <section class="hero-strip" aria-label="Daily focus">
@@ -68,11 +68,7 @@
 
           <article class="panel agenda-panel" data-section="overview agenda">
             <div class="panel-heading"><div><p class="eyebrow">NEXT UP</p><h2>Today's agenda</h2></div><button class="text-button" data-view-target="agenda">View all</button></div>
-            <div class="agenda-list">
-              <div class="agenda-item"><time>09:00</time><div><strong>Deep work block</strong><span>Build the first useful slice</span></div><b class="tag blue">FOCUS</b></div>
-              <div class="agenda-item"><time>13:30</time><div><strong>Business review</strong><span>Check weekly performance signals</span></div><b class="tag orange">REVIEW</b></div>
-              <div class="agenda-item"><time>18:00</time><div><strong>Reset and plan</strong><span>Close loops before tomorrow</span></div><b class="tag green">PERSONAL</b></div>
-            </div>
+            <div class="agenda-list" id="agenda-list"><div class="agenda-item"><time>09:00</time><div><strong>Deep work block</strong><span>Build the first useful slice</span></div><b class="tag blue">FOCUS</b></div><div class="agenda-item"><time>13:30</time><div><strong>Business review</strong><span>Check weekly performance signals</span></div><b class="tag orange">REVIEW</b></div><div class="agenda-item"><time>18:00</time><div><strong>Reset and plan</strong><span>Close loops before tomorrow</span></div><b class="tag green">PERSONAL</b></div></div>
           </article>
 
           <article class="panel signal-panel" data-section="overview workbench">
@@ -122,6 +118,15 @@
         <label for="sync-url">Apps Script web app URL</label>
         <input id="sync-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" />
         <div class="dialog-actions"><button type="button" class="quiet-button" id="sync-cancel">Cancel</button><button type="submit" class="action-button">Connect</button></div>
+      </form>
+    </dialog>
+    <dialog class="sync-dialog profile-dialog" id="profile-dialog">
+      <form method="dialog" id="profile-form">
+        <p class="eyebrow">YOUR OPERATING CONTEXT</p>
+        <h2>Make JARVIS yours</h2>
+        <p class="muted">This context stays in this browser and helps the assistant make better tradeoffs.</p>
+        <div class="profile-grid"><label for="profile-name">Name<input id="profile-name" required /></label><label for="profile-university">University / course<input id="profile-university" placeholder="e.g. Computer Science at UCL" /></label><label for="profile-business">Business focus<input id="profile-business" placeholder="e.g. Creator account and client work" /></label><label for="profile-training">Training focus<input id="profile-training" placeholder="e.g. Football + strength" /></label></div>
+        <div class="dialog-actions"><button type="button" class="quiet-button" id="profile-cancel">Cancel</button><button type="submit" class="action-button">Save context</button></div>
       </form>
     </dialog>
     <script type="module" src="app.js"></script>

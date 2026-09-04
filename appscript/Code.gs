@@ -224,7 +224,8 @@ function askAssistant_(request) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('Add GEMINI_API_KEY in Apps Script project settings first.');
   const message = required_(request.message, 'message');
-  const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
+  const context = request.context || {};
+  const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. User context: ${JSON.stringify(context)}. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
   if (request.image) {
     const imageParts = request.image.split(',');
     if (imageParts.length !== 2) throw new Error('Image attachment format is invalid.');

@@ -2,6 +2,18 @@
 
 A dependency-free first slice of a personal assistant designed for GitHub Pages and iPhone Safari. It currently runs in local demo mode and stores the command queue in browser `localStorage`.
 
+## V2 operating model
+
+V2 treats JARVIS as a personal operating system rather than a task list. Your local operating context includes university/course, business focus, and training focus. The assistant receives that context when connected so a timetable, deadline, workout, or business message can be interpreted against the rest of your life. The daily agenda uses Google Calendar events when sync is connected and falls back to a usable local plan otherwise.
+
+The V2 loop is:
+
+1. Capture text, a screenshot, an email signal, or a social idea.
+2. Let JARVIS extract tasks, questions, and calendar proposals.
+3. Review the proposal and approve the specific action.
+4. Execute the day with focus time and energy-aware planning.
+5. Review outcomes, training load, business signals, and what needs to change.
+
 ## Run it
 
 Open `index.html` in a browser, or serve this folder with any static file server. GitHub Pages can publish the folder directly after it is pushed to a repository.

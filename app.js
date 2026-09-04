@@ -16,6 +16,7 @@ const pulseStatus = document.querySelector('#pulse-status');
 const syncLabel = document.querySelector('#sync-label');
 const emailList = document.querySelector('#email-list');
 const socialList = document.querySelector('#social-list');
+const agendaList = document.querySelector('#agenda-list');
 const proposalList = document.querySelector('#proposal-list');
 const attachmentName = document.querySelector('#attachment-name');
 let tasks = JSON.parse(localStorage.getItem('jarvis-tasks') || 'null') || initialTasks;
@@ -23,12 +24,41 @@ let focusTimer;
 let focusSeconds = 0;
 let pendingImage = '';
 let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
+let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sasha', university: '', business: '', training: '' };
 
 function updateDate() {
   const now = new Date();
   document.querySelector('#current-date').textContent = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now).toUpperCase();
   const hour = now.getHours();
-  document.querySelector('#page-title').textContent = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, Sasha.`;
+  document.querySelector('#page-title').textContent = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, ${profile.name}.`;
+}
+
+function renderCalendar(events = []) {
+  if (!events.length) return;
+  agendaList.replaceChildren(...events.slice(0, 6).map((event) => {
+    const item = document.createElement('div');
+    item.className = 'agenda-item synced-event';
+    const time = document.createElement('time');
+    time.textContent = new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const copy = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = event.title;
+    const detail = document.createElement('span');
+    detail.textContent = event.location || 'Google Calendar';
+    copy.append(title, detail);
+    const tag = document.createElement('b');
+    tag.className = 'tag blue';
+    tag.textContent = 'CALENDAR';
+    item.append(time, copy, tag);
+    return item;
+  }));
+}
+
+function loadProfileFields() {
+  document.querySelector('#profile-name').value = profile.name;
+  document.querySelector('#profile-university').value = profile.university;
+  document.querySelector('#profile-business').value = profile.business;
+  document.querySelector('#profile-training').value = profile.training;
 }
 
 function updateSyncLabel() {
@@ -222,7 +252,7 @@ async function submitAssistantCommand(command) {
   }
   addAssistantMessage('Reading that now...', 'assistant');
   try {
-    const result = await askAssistant(command.trim(), image || undefined);
+    const result = await askAssistant(command.trim(), image || undefined, profile);
     const response = result.reply || 'I found some useful context.';
     addAssistantMessage(response, 'assistant');
     if (result.questions?.length) addAssistantMessage(`Before I schedule anything: ${result.questions.join(' ')}`, 'assistant');
@@ -349,6 +379,16 @@ document.querySelector('#sync-control').addEventListener('click', async () => {
   syncUrl.value = localStorage.getItem('jarvis-api-url') || '';
   syncDialog.showModal();
 });
+document.querySelector('#profile-button').addEventListener('click', () => { loadProfileFields(); document.querySelector('#profile-dialog').showModal(); });
+document.querySelector('#profile-cancel').addEventListener('click', () => document.querySelector('#profile-dialog').close());
+document.querySelector('#profile-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  profile = { name: document.querySelector('#profile-name').value.trim() || 'Sasha', university: document.querySelector('#profile-university').value.trim(), business: document.querySelector('#profile-business').value.trim(), training: document.querySelector('#profile-training').value.trim() };
+  localStorage.setItem('jarvis-profile', JSON.stringify(profile));
+  updateDate();
+  document.querySelector('#profile-dialog').close();
+  showToast('Your operating context is saved.');
+});
 document.querySelector('#sync-cancel').addEventListener('click', () => document.querySelector('#sync-dialog').close());
 document.querySelector('#sync-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -371,6 +411,7 @@ document.querySelector('#sync-form').addEventListener('submit', async (event) =>
       localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
       renderTasks();
       refreshBriefing();
+      renderCalendar(dashboard.calendar || []);
     }
     showToast('Google sync connected.');
   } catch (error) {
@@ -394,6 +435,7 @@ refreshBriefing();
 renderEmails();
 renderSocialReminders();
 updateDate();
+loadProfileFields();
 updateSyncLabel();
 const savedPulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null');
 if (savedPulse) pulseStatus.textContent = savedPulse.pulse.toUpperCase();
@@ -406,5 +448,6 @@ if (isConnected()) {
     renderTasks();
     refreshBriefing();
     applyDashboardSignals(dashboard);
+    renderCalendar(dashboard.calendar || []);
   }).catch(() => showToast('Offline mode active. Local data is safe.'));
 }

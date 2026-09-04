@@ -47,8 +47,8 @@ export async function syncPocketAthleteWorkout(workout) {
   return sendCommand({ action: 'syncPocketAthleteWorkout', ...workout });
 }
 
-export async function askAssistant(message, image) {
-  return sendCommand({ action: 'assistant', message, image });
+export async function askAssistant(message, image, context) {
+  return sendCommand({ action: 'assistant', message, image, context });
 }
 
 export async function createCalendarEvent(event) {

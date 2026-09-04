@@ -21,7 +21,7 @@
           <button class="nav-item" data-view="workbench"><span>⌘</span> Workbench</button>
           <button class="nav-item" data-view="performance"><span>↗</span> Performance</button>
         </nav>
-        <div class="sidebar-foot"><span class="status-dot"></span><span>Local demo mode</span></div>
+        <button class="sidebar-foot sync-control" id="sync-control" type="button"><span class="status-dot"></span><span id="sync-label">Local demo mode</span><span class="sync-arrow">↗</span></button>
       </aside>
 
       <main class="main-content">
@@ -101,6 +101,16 @@
       </main>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog class="sync-dialog" id="sync-dialog">
+      <form method="dialog" id="sync-form">
+        <p class="eyebrow">DATA CONNECTION</p>
+        <h2>Connect Google sync</h2>
+        <p class="muted">Paste your Apps Script <strong>/exec</strong> URL. JARVIS will keep working locally if the connection is unavailable.</p>
+        <label for="sync-url">Apps Script web app URL</label>
+        <input id="sync-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" />
+        <div class="dialog-actions"><button type="button" class="quiet-button" id="sync-cancel">Cancel</button><button type="submit" class="action-button">Connect</button></div>
+      </form>
+    </dialog>
     <script type="module" src="app.js"></script>
   </body>
 </html>

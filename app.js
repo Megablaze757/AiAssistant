@@ -13,6 +13,7 @@ const briefingCopy = document.querySelector('#briefing-copy');
 const assistantLog = document.querySelector('#assistant-log');
 const assistantInput = document.querySelector('#assistant-input');
 const pulseStatus = document.querySelector('#pulse-status');
+const syncLabel = document.querySelector('#sync-label');
 let tasks = JSON.parse(localStorage.getItem('jarvis-tasks') || 'null') || initialTasks;
 let focusTimer;
 let focusSeconds = 0;
@@ -22,6 +23,10 @@ function updateDate() {
   document.querySelector('#current-date').textContent = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now).toUpperCase();
   const hour = now.getHours();
   document.querySelector('#page-title').textContent = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, Sasha.`;
+}
+
+function updateSyncLabel() {
+  syncLabel.textContent = isConnected() ? 'Google sync connected' : 'Local demo mode';
 }
 
 function renderTasks() {
@@ -194,6 +199,42 @@ document.querySelector('#plan-day').addEventListener('click', () => {
   document.querySelector('#hero-message').textContent = message;
   showToast('Your day has been shaped around your current energy.');
 });
+document.querySelector('#sync-control').addEventListener('click', async () => {
+  const syncDialog = document.querySelector('#sync-dialog');
+  const syncUrl = document.querySelector('#sync-url');
+  syncUrl.value = localStorage.getItem('jarvis-api-url') || '';
+  syncDialog.showModal();
+});
+document.querySelector('#sync-cancel').addEventListener('click', () => document.querySelector('#sync-dialog').close());
+document.querySelector('#sync-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const url = document.querySelector('#sync-url').value;
+  const cleanUrl = url.trim().replace(/\/$/, '');
+  if (cleanUrl && !cleanUrl.includes('/exec')) {
+    showToast('That does not look like an Apps Script /exec URL.');
+    return;
+  }
+  if (cleanUrl) localStorage.setItem('jarvis-api-url', cleanUrl);
+  else localStorage.removeItem('jarvis-api-url');
+  updateSyncLabel();
+  document.querySelector('#sync-dialog').close();
+  if (!cleanUrl) { showToast('Local demo mode restored.'); return; }
+  showToast('Testing Google sync...');
+  try {
+    const dashboard = await requestDashboard();
+    if (dashboard?.tasks) {
+      tasks = dashboard.tasks;
+      localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+      renderTasks();
+      refreshBriefing();
+    }
+    showToast('Google sync connected.');
+  } catch (error) {
+    localStorage.removeItem('jarvis-api-url');
+    updateSyncLabel();
+    showToast('Could not connect. Local mode is still safe.');
+  }
+});
 document.querySelector('#assistant-form').addEventListener('submit', (event) => { event.preventDefault(); submitAssistantCommand(assistantInput.value); });
 document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => submitAssistantCommand(button.dataset.command)));
 document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
@@ -207,6 +248,7 @@ document.querySelectorAll('[data-view-target]').forEach((button) => button.addEv
 renderTasks();
 refreshBriefing();
 updateDate();
+updateSyncLabel();
 const savedPulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null');
 if (savedPulse) pulseStatus.textContent = savedPulse.pulse.toUpperCase();
 

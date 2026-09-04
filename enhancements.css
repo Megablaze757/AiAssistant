@@ -1,4 +1,10 @@
 [hidden] { display: none !important; }
+.sync-control { width: 100%; border: 0; background: transparent; text-align: left; }
+.sync-control:hover, .sync-control:focus-visible { color: var(--ink); }
+.sync-arrow { margin-left: auto; color: var(--cyan); }
+.sync-dialog { width: min(92vw, 440px); padding: 0; border: 1px solid var(--line); background: var(--panel); color: var(--ink); box-shadow: 0 24px 80px rgba(0, 0, 0, .45); }
+.sync-dialog::backdrop { background: rgba(5, 12, 20, .72); backdrop-filter: blur(5px); }
+.sync-dialog form { padding: 26px; }.sync-dialog h2 { margin: 8px 0 10px; }.sync-dialog label { display: block; margin-top: 20px; color: var(--muted); font-size: 11px; }.sync-dialog input { width: 100%; margin-top: 8px; padding: 11px 12px; border: 1px solid var(--line); outline: 0; background: #102033; color: var(--ink); }.sync-dialog input:focus { border-color: var(--cyan); }.dialog-actions { display: flex; justify-content: end; gap: 9px; margin-top: 20px; }
 .hero-note { max-width: 600px; margin: 10px 0 0; color: #a9c0cd; font-size: 12px; line-height: 1.5; }
 .hero-action { display: block; margin-top: 12px; padding: 7px 10px; border: 1px solid var(--cyan); background: transparent; color: var(--cyan); font-size: 11px; }
 .life-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }

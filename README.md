@@ -23,6 +23,8 @@ The local demo path should remain available so the app is usable during developm
 
 `src/api.js` is the only frontend module that should know the Apps Script URL. Add the deployed `/exec` URL to `API_URL` when the backend is ready. Keep it blank for local demo mode. The UI is intentionally usable without the network, and the adapter uses a `text/plain` POST body to avoid Apps Script browser preflight issues.
 
+You can also connect without editing code: open the app, select the sync status at the bottom of the sidebar, paste the Apps Script `/exec` URL, and choose **Connect**. The URL is stored only in that browser's local storage. Clear the field to return to local demo mode.
+
 The current command line uses a small local intent parser so the workflow can be tested immediately. Once the backend is connected, the same command surface can send structured requests to Gemini through Apps Script and return approved actions such as task creation, calendar proposals, and daily summaries.
 
 ## PocketAthlete sync

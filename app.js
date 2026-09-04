@@ -1,4 +1,4 @@
-import { isConnected, requestDashboard, saveCapture, savePulse, saveReview, saveTask, updateTask } from './src/api.js';
+import { askAssistant, createCalendarEvent, isConnected, requestDashboard, saveCapture, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
 
 const initialTasks = [
   { id: 1, title: 'Ship the first JARVIS slice', detail: 'Build the daily command center', type: 'task', done: false },
@@ -14,9 +14,15 @@ const assistantLog = document.querySelector('#assistant-log');
 const assistantInput = document.querySelector('#assistant-input');
 const pulseStatus = document.querySelector('#pulse-status');
 const syncLabel = document.querySelector('#sync-label');
+const emailList = document.querySelector('#email-list');
+const socialList = document.querySelector('#social-list');
+const proposalList = document.querySelector('#proposal-list');
+const attachmentName = document.querySelector('#attachment-name');
 let tasks = JSON.parse(localStorage.getItem('jarvis-tasks') || 'null') || initialTasks;
 let focusTimer;
 let focusSeconds = 0;
+let pendingImage = '';
+let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
 
 function updateDate() {
   const now = new Date();
@@ -27,6 +33,58 @@ function updateDate() {
 
 function updateSyncLabel() {
   syncLabel.textContent = isConnected() ? 'Google sync connected' : 'Local demo mode';
+}
+
+function renderEmails(emails = []) {
+  emailList.replaceChildren();
+  if (!emails.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = isConnected() ? 'No important unread mail in the last three days.' : 'Connect Google sync to surface important mail without reading your whole inbox.';
+    emailList.append(empty);
+    return;
+  }
+  emails.forEach((email) => {
+    const item = document.createElement('div');
+    item.className = 'email-item';
+    const copy = document.createElement('div');
+    const subject = document.createElement('strong');
+    subject.textContent = email.subject;
+    const meta = document.createElement('small');
+    meta.textContent = `${email.from} • ${new Date(email.receivedAt).toLocaleDateString()}`;
+    copy.append(subject, meta);
+    item.append(copy);
+    emailList.append(item);
+  });
+}
+
+function renderSocialReminders() {
+  socialList.replaceChildren();
+  if (!socialReminders.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No posting reminders yet.';
+    socialList.append(empty);
+    return;
+  }
+  socialReminders.slice().sort((a, b) => new Date(a.remindAt) - new Date(b.remindAt)).forEach((reminder) => {
+    const item = document.createElement('div');
+    item.className = 'social-item';
+    const topic = document.createElement('strong');
+    topic.textContent = reminder.topic;
+    const detail = document.createElement('small');
+    detail.textContent = `${reminder.channel} • ${new Date(reminder.remindAt).toLocaleString()}`;
+    item.append(topic, detail);
+    socialList.append(item);
+  });
+}
+
+function applyDashboardSignals(dashboard) {
+  renderEmails(dashboard?.importantEmails || []);
+  if (!dashboard?.socialReminders) return;
+  socialReminders = dashboard.socialReminders;
+  localStorage.setItem('jarvis-social', JSON.stringify(socialReminders));
+  renderSocialReminders();
 }
 
 function renderTasks() {
@@ -111,11 +169,67 @@ function handleAssistantCommand(command) {
   return 'I can help with your next move, open work, or adding a task. Connect the Apps Script backend for richer AI reasoning.';
 }
 
-function submitAssistantCommand(command) {
+function renderAssistantProposals(result) {
+  proposalList.replaceChildren();
+  const proposals = [...(result.tasks || []).map((task) => ({ kind: 'task', ...task })), ...(result.events || []).map((event) => ({ kind: 'event', ...event }))];
+  proposals.forEach((proposal) => {
+    const card = document.createElement('div');
+    card.className = 'proposal-card';
+    const copy = document.createElement('div');
+    const label = document.createElement('span');
+    label.className = 'eyebrow';
+    label.textContent = proposal.kind === 'event' ? 'CALENDAR PROPOSAL' : 'TASK PROPOSAL';
+    const title = document.createElement('strong');
+    title.textContent = proposal.title;
+    const detail = document.createElement('small');
+    detail.textContent = proposal.kind === 'event' ? (proposal.start ? `${new Date(proposal.start).toLocaleString()}${proposal.end ? ` - ${new Date(proposal.end).toLocaleTimeString()}` : ''}` : 'Needs a date and time before it can be scheduled.') : (proposal.detail || proposal.type || 'JARVIS suggestion');
+    copy.append(label, title, detail);
+    const action = document.createElement('button');
+    action.className = 'quiet-button proposal-action';
+    action.textContent = proposal.kind === 'event' ? 'Add to calendar' : 'Add task';
+    action.disabled = proposal.kind === 'event' && !proposal.start;
+    action.addEventListener('click', async () => {
+      action.disabled = true;
+      if (proposal.kind === 'task') {
+        const task = { id: Date.now(), title: proposal.title, detail: proposal.detail || 'Suggested by JARVIS', type: proposal.type || 'task', done: false };
+        tasks.push(task);
+        localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+        renderTasks();
+        if (isConnected()) await saveTask(task).catch(() => null);
+        showToast('Task added to your queue.');
+      } else if (isConnected()) {
+        await createCalendarEvent(proposal).then(() => showToast('Added to Google Calendar.')).catch(() => { action.disabled = false; showToast('Calendar write failed.'); });
+      } else {
+        action.disabled = false;
+        showToast('Connect Google sync before adding calendar events.');
+      }
+    });
+    card.append(copy, action);
+    proposalList.append(card);
+  });
+}
+
+async function submitAssistantCommand(command) {
   if (!command.trim()) return;
-  addAssistantMessage(command.trim(), 'user');
+  addAssistantMessage(`${command.trim()}${pendingImage ? ' [image attached]' : ''}`, 'user');
   assistantInput.value = '';
-  window.setTimeout(() => addAssistantMessage(handleAssistantCommand(command), 'assistant'), 180);
+  const image = pendingImage;
+  pendingImage = '';
+  attachmentName.textContent = '';
+  if (!isConnected()) {
+    window.setTimeout(() => addAssistantMessage(image ? 'I have the image, but real image understanding starts after Google sync and Gemini are connected.' : handleAssistantCommand(command), 'assistant'), 180);
+    return;
+  }
+  addAssistantMessage('Reading that now...', 'assistant');
+  try {
+    const result = await askAssistant(command.trim(), image || undefined);
+    const response = result.reply || 'I found some useful context.';
+    addAssistantMessage(response, 'assistant');
+    if (result.questions?.length) addAssistantMessage(`Before I schedule anything: ${result.questions.join(' ')}`, 'assistant');
+    renderAssistantProposals(result);
+  } catch (error) {
+    addAssistantMessage('I could not reach the AI service, so nothing was changed. Your local data is still safe.', 'assistant');
+  }
 }
 
 taskList.addEventListener('change', (event) => {
@@ -152,6 +266,33 @@ document.querySelector('#capture-form').addEventListener('submit', (event) => {
   renderTasks();
   if (isConnected()) saveCapture(capturedText, type).catch(() => showToast('Captured locally. Sync will retry later.'));
   showToast('Captured. It is now in your queue.');
+});
+document.querySelector('#attach-button').addEventListener('click', () => document.querySelector('#assistant-file').click());
+document.querySelector('#assistant-file').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 6 * 1024 * 1024) { showToast('Please keep screenshots under 6 MB.'); event.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.addEventListener('load', () => { pendingImage = reader.result; attachmentName.textContent = `${file.name} attached`; });
+  reader.readAsDataURL(file);
+});
+document.querySelector('#social-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const topic = document.querySelector('#social-topic').value.trim();
+  const channel = document.querySelector('#social-channel').value;
+  const remindAt = document.querySelector('#social-date').value;
+  if (!topic || !remindAt) { showToast('Add a topic and reminder time.'); return; }
+  const reminder = { id: Date.now(), topic, channel, remindAt, done: false };
+  socialReminders.push(reminder);
+  localStorage.setItem('jarvis-social', JSON.stringify(socialReminders));
+  renderSocialReminders();
+  if (isConnected()) saveSocialReminder(reminder).catch(() => showToast('Reminder saved locally. Sync will retry later.'));
+  document.querySelector('#social-topic').value = '';
+  showToast('Posting reminder added.');
+});
+document.querySelector('#refresh-signals').addEventListener('click', async () => {
+  if (!isConnected()) { renderEmails(); showToast('Connect Google sync to read important mail.'); return; }
+  try { applyDashboardSignals(await requestDashboard()); showToast('Signals refreshed.'); } catch (error) { showToast('Could not refresh inbox signals.'); }
 });
 
 document.querySelector('#focus-button').addEventListener('click', () => {
@@ -250,6 +391,8 @@ document.querySelectorAll('[data-view-target]').forEach((button) => button.addEv
 
 renderTasks();
 refreshBriefing();
+renderEmails();
+renderSocialReminders();
 updateDate();
 updateSyncLabel();
 const savedPulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null');
@@ -262,5 +405,6 @@ if (isConnected()) {
     localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
     renderTasks();
     refreshBriefing();
+    applyDashboardSignals(dashboard);
   }).catch(() => showToast('Offline mode active. Local data is safe.'));
 }

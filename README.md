@@ -13,6 +13,9 @@ The paste-ready backend is in `appscript/Code.gs`. Follow its setup comments to 
 - `GET` dashboard data: tasks, events, metrics, and recent captures
 - `POST` task/capture changes
 - `POST` pulse, workout, review, and performance metric entries
+- `POST` AI assistant requests with optional timetable/homework images
+- `GET` a limited important-email signal feed (unread, recent, important/starred, excluding promotions/social)
+- `POST` social posting reminders
 - A clear authentication strategy for a private personal app
 
 Important: a public GitHub Pages site cannot keep a secret API key. For a truly private deployment, use Google login/OAuth or host the frontend behind an authenticated platform. The Apps Script web-app setting `Anyone with the link` is convenient for testing but should not be treated as strong privacy protection.
@@ -25,7 +28,15 @@ The local demo path should remain available so the app is usable during developm
 
 You can also connect without editing code: open the app, select the sync status at the bottom of the sidebar, paste the Apps Script `/exec` URL, and choose **Connect**. The URL is stored only in that browser's local storage. Clear the field to return to local demo mode.
 
+## AI inbox setup
+
+The AI inbox accepts text and image attachments. To enable real Gemini responses, open Apps Script **Project Settings → Script properties**, add `GEMINI_API_KEY`, and keep the value there. Never place that key in this GitHub repository or in frontend code. JARVIS returns proposals first; calendar events are not created until you approve them.
+
 The current command line uses a small local intent parser so the workflow can be tested immediately. Once the backend is connected, the same command surface can send structured requests to Gemini through Apps Script and return approved actions such as task creation, calendar proposals, and daily summaries.
+
+## Email and social signals
+
+When Google sync is connected, Apps Script reads only a narrow Gmail query: unread messages from the last three days that are marked important or starred, excluding promotions and social mail. JARVIS receives sender, subject, date, and a short snippet. It does not forward the whole inbox to Gemini. Social reminders are stored in the `Social` sheet and can later create approved Calendar events.
 
 ## PocketAthlete sync
 

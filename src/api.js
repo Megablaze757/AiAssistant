@@ -46,3 +46,15 @@ export async function saveReview(note) {
 export async function syncPocketAthleteWorkout(workout) {
   return sendCommand({ action: 'syncPocketAthleteWorkout', ...workout });
 }
+
+export async function askAssistant(message, image) {
+  return sendCommand({ action: 'assistant', message, image });
+}
+
+export async function createCalendarEvent(event) {
+  return sendCommand({ action: 'createCalendarEvent', ...event });
+}
+
+export async function saveSocialReminder(reminder) {
+  return sendCommand({ action: 'saveSocialReminder', ...reminder });
+}

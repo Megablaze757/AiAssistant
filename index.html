@@ -60,7 +60,9 @@
           <article class="panel assistant-panel" data-section="overview workbench">
             <div class="panel-heading"><div><p class="eyebrow">COMMAND LINE</p><h2>Ask JARVIS</h2></div><span class="ai-badge">READY</span></div>
             <div class="assistant-log" id="assistant-log" aria-live="polite"><div class="assistant-message assistant"><span>J</span><p>Tell me what you need. I can add tasks, show your open work, or help you choose the next move.</p></div></div>
-            <form class="assistant-form" id="assistant-form"><input id="assistant-input" autocomplete="off" placeholder="e.g. Add review business numbers" aria-label="Ask JARVIS" /><button type="submit" aria-label="Send command">↗</button></form>
+            <div class="proposal-list" id="proposal-list" aria-live="polite"></div>
+            <form class="assistant-form" id="assistant-form"><textarea id="assistant-input" rows="1" placeholder="Tell JARVIS about a timetable, deadline, or idea..." aria-label="Ask JARVIS"></textarea><input id="assistant-file" type="file" accept="image/png,image/jpeg,image/webp" hidden /><button type="button" class="attach-button" id="attach-button" aria-label="Attach a screenshot" title="Attach a screenshot">⌕</button><button type="submit" aria-label="Send command">↗</button></form>
+            <p class="attachment-name" id="attachment-name"></p>
             <div class="command-chips"><button type="button" data-command="What should I do next?">Next move</button><button type="button" data-command="Show my open work">Open work</button><button type="button" data-command="Add a task to review my numbers">Add task</button></div>
           </article>
 
@@ -71,6 +73,17 @@
               <div class="agenda-item"><time>13:30</time><div><strong>Business review</strong><span>Check weekly performance signals</span></div><b class="tag orange">REVIEW</b></div>
               <div class="agenda-item"><time>18:00</time><div><strong>Reset and plan</strong><span>Close loops before tomorrow</span></div><b class="tag green">PERSONAL</b></div>
             </div>
+          </article>
+
+          <article class="panel signal-panel" data-section="overview workbench">
+            <div class="panel-heading"><div><p class="eyebrow">SIGNAL WATCH</p><h2>Important inbox</h2></div><button class="text-button" id="refresh-signals">Refresh</button></div>
+            <div class="email-list" id="email-list"><p class="muted">Connect Google sync to surface important mail without reading your whole inbox.</p></div>
+          </article>
+
+          <article class="panel social-panel" data-section="overview workbench">
+            <div class="panel-heading"><div><p class="eyebrow">SOCIAL ENGINE</p><h2>Post with intention</h2></div><span class="ai-badge">CADENCE</span></div>
+            <form class="social-form" id="social-form"><input id="social-topic" placeholder="What should you post about?" aria-label="Social post topic" /><select id="social-channel" aria-label="Social channel"><option>Instagram</option><option>TikTok</option><option>LinkedIn</option><option>X</option></select><input id="social-date" type="datetime-local" aria-label="Post reminder date and time" /><button type="submit" aria-label="Save social reminder">+</button></form>
+            <div class="social-list" id="social-list"><p class="muted">No posting reminders yet.</p></div>
           </article>
 
           <article class="panel pulse-panel" data-section="overview agenda performance">

@@ -20,7 +20,8 @@ const SHEETS = {
   reviews: 'Reviews',
   pulses: 'Pulses',
   workouts: 'Workouts',
-  metrics: 'Metrics'
+  metrics: 'Metrics',
+  social: 'Social'
 };
 
 function setupJarvis() {
@@ -31,6 +32,7 @@ function setupJarvis() {
   createSheet_(spreadsheet, SHEETS.pulses, ['id', 'energy', 'note', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.workouts, ['id', 'name', 'durationMinutes', 'intensity', 'notes', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.metrics, ['id', 'area', 'name', 'value', 'unit', 'createdAt']);
+  createSheet_(spreadsheet, SHEETS.social, ['id', 'topic', 'channel', 'remindAt', 'done', 'createdAt']);
   PropertiesService.getScriptProperties().setProperty('JARVIS_SHEET_ID', spreadsheet.getId());
   return json_({ ok: true, message: 'JARVIS is ready.' });
 }
@@ -57,6 +59,8 @@ function doPost(event) {
     if (action === 'logWorkout') return json_({ ok: true, workout: logWorkout_(request) });
     if (action === 'syncPocketAthleteWorkout') return json_({ ok: true, workout: syncPocketAthleteWorkout_(request) });
     if (action === 'saveMetric') return json_({ ok: true, metric: saveMetric_(request) });
+    if (action === 'assistant') return json_({ ok: true, ...askAssistant_(request) });
+    if (action === 'saveSocialReminder') return json_({ ok: true, reminder: saveSocialReminder_(request) });
     if (action === 'createCalendarEvent') return json_({ ok: true, event: createCalendarEvent_(request) });
     throw new Error('Unknown action.');
   } catch (error) {
@@ -83,7 +87,7 @@ function getDashboard_() {
     end: item.getEndTime().toISOString(),
     location: item.getLocation()
   }));
-  return { ok: true, tasks: tasks, calendar: calendar, lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics) };
+  return { ok: true, tasks: tasks, calendar: calendar, importantEmails: getImportantEmails_(), socialReminders: readRows_(SHEETS.social), lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics) };
 }
 
 function addTask_(request) {
@@ -214,4 +218,38 @@ function syncPocketAthleteWorkout_(request) {
   const existing = readRows_(SHEETS.workouts).some((row) => String(row.id) === String(workout.id));
   if (!existing) appendRow_(SHEETS.workouts, workout);
   return workout;
+}
+
+function askAssistant_(request) {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('Add GEMINI_API_KEY in Apps Script project settings first.');
+  const message = required_(request.message, 'message');
+  const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
+  if (request.image) {
+    const imageParts = request.image.split(',');
+    if (imageParts.length !== 2) throw new Error('Image attachment format is invalid.');
+    const mimeType = imageParts[0].match(/^data:(image\/[a-zA-Z0-9.+-]+);base64$/)?.[1];
+    if (!mimeType) throw new Error('Only image attachments are supported.');
+    parts.push({ inlineData: { mimeType: mimeType, data: imageParts[1] } });
+  }
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
+  const response = UrlFetchApp.fetch(endpoint, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }), muteHttpExceptions: true });
+  if (response.getResponseCode() >= 300) throw new Error(`Gemini request failed (${response.getResponseCode()}).`);
+  const body = JSON.parse(response.getContentText());
+  const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini returned no assistant response.');
+  return JSON.parse(text.replace(/^```json\s*/, '').replace(/\s*```$/, ''));
+}
+
+function saveSocialReminder_(request) {
+  const reminder = { id: Utilities.getUuid(), topic: required_(request.topic, 'topic'), channel: request.channel || 'Social', remindAt: required_(request.remindAt, 'remindAt'), done: false, createdAt: new Date().toISOString() };
+  appendRow_(SHEETS.social, reminder);
+  return reminder;
+}
+
+function getImportantEmails_() {
+  return GmailApp.search('is:unread newer_than:3d (is:important OR has:starred) -category:promotions -category:social', 0, 10).map((thread) => {
+    const message = thread.getMessages().pop();
+    return { id: thread.getId(), from: message.getFrom(), subject: message.getSubject(), receivedAt: message.getDate().toISOString(), snippet: message.getPlainBody().slice(0, 220) };
+  });
 }

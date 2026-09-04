@@ -26,6 +26,7 @@ let pendingImage = '';
 let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
 let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sasha', university: '', business: '', training: '' };
 let metrics = JSON.parse(localStorage.getItem('jarvis-metrics') || '[]');
+let objective = JSON.parse(localStorage.getItem('jarvis-objective') || 'null');
 
 function updateDate() {
   const now = new Date();
@@ -151,7 +152,17 @@ function notifyUpcoming() {
 }
 
 function renderTasks() {
-  taskList.replaceChildren(...tasks.map((task) => {
+  const priorityRank = { high: 0, medium: 1, low: 2 };
+  const orderedTasks = tasks.slice().sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    const priorityDifference = (priorityRank[a.priority || 'medium'] ?? 1) - (priorityRank[b.priority || 'medium'] ?? 1);
+    if (priorityDifference) return priorityDifference;
+    if (!a.dueAt && !b.dueAt) return 0;
+    if (!a.dueAt) return 1;
+    if (!b.dueAt) return -1;
+    return new Date(a.dueAt) - new Date(b.dueAt);
+  });
+  taskList.replaceChildren(...orderedTasks.map((task) => {
     const item = document.createElement('div');
     item.className = `task ${task.done ? 'done' : ''}`;
     const checkbox = document.createElement('input');
@@ -164,8 +175,10 @@ function renderTasks() {
     const title = document.createElement('strong');
     title.textContent = task.title;
     const detail = document.createElement('small');
-    const due = task.dueAt ? `Due ${new Date(task.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : task.detail;
+    const overdue = task.dueAt && !task.done && new Date(task.dueAt) < new Date();
+    const due = task.dueAt ? `${overdue ? 'Overdue' : 'Due'} ${new Date(task.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : task.detail;
     detail.textContent = due;
+    if (overdue) detail.className = 'overdue';
     const badge = document.createElement('em');
     badge.className = `priority ${task.priority || 'medium'}`;
     badge.textContent = task.priority || 'medium';
@@ -175,6 +188,7 @@ function renderTasks() {
   }));
   focusCount.textContent = String(tasks.filter((task) => !task.done).length).padStart(2, '0');
   document.querySelector('#completed-count').textContent = String(tasks.filter((task) => task.done).length).padStart(2, '0');
+  if (objective) renderObjective();
 }
 
 function showToast(message) {
@@ -381,6 +395,18 @@ document.querySelector('#metric-form').addEventListener('submit', (event) => {
   document.querySelector('#metric-value').value = '';
   showToast('Metric logged.');
 });
+document.querySelector('#objective-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const text = document.querySelector('#objective-input').value.trim();
+  if (!text) return;
+  const lowerText = text.toLowerCase();
+  const area = lowerText.includes('study') || lowerText.includes('assignment') ? 'study' : lowerText.includes('business') || lowerText.includes('revenue') ? 'business' : lowerText.includes('train') || lowerText.includes('gym') ? 'training' : 'coding';
+  objective = { text, area, savedAt: new Date().toISOString() };
+  localStorage.setItem('jarvis-objective', JSON.stringify(objective));
+  renderObjective();
+  document.querySelector('#objective-input').value = '';
+  showToast('Weekly objective set.');
+});
 
 document.querySelector('#focus-button').addEventListener('click', () => {
   const button = document.querySelector('#focus-button');
@@ -492,6 +518,7 @@ refreshBriefing();
 renderEmails();
 renderSocialReminders();
 renderMetrics();
+renderObjective();
 updateDate();
 loadProfileFields();
 updateSyncLabel();
@@ -508,4 +535,14 @@ if (isConnected()) {
     applyDashboardSignals(dashboard);
     renderCalendar(dashboard.calendar || []);
   }).catch(() => showToast('Offline mode active. Local data is safe.'));
+}
+
+function renderObjective() {
+  const copy = document.querySelector('#objective-copy');
+  const progress = document.querySelector('#objective-progress');
+  if (!objective) { copy.textContent = 'Choose the outcome that would make this week feel meaningful.'; progress.textContent = '0%'; return; }
+  copy.textContent = objective.text;
+  const matching = tasks.filter((task) => task.type === objective.area || objective.text.toLowerCase().includes(task.type));
+  const completed = matching.filter((task) => task.done).length;
+  progress.textContent = `${matching.length ? Math.min(100, Math.round((completed / matching.length) * 100)) : 0}%`;
 }

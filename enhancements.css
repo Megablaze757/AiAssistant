@@ -70,3 +70,53 @@
 .trend.is-down { color: var(--orange); }
 .trend.is-flat { color: var(--muted); }
 @media (max-width: 720px) { .training-actions button { flex: 1; } }
+
+/* Today's plan. Real times, so the times are what the eye lands on first. */
+.plan-panel { margin-top: 16px; }
+.plan-blocks { display: grid; gap: 9px; }
+.plan-block { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 10px 12px; border: 0; border-left: 2px solid var(--cyan); background: #1e3147; color: var(--ink); text-align: left; }
+.plan-block:hover, .plan-block:focus-visible { background: #24405c; }
+.plan-block time { min-width: 96px; color: var(--cyan); font: 500 12px 'DM Mono', monospace; }
+.plan-block div { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.plan-block strong { font-size: 14px; }
+.plan-block small { color: var(--muted); font-size: 12px; }
+.plan-block .plan-go { color: var(--muted); font-size: 11px; }
+.plan-block.is-active { border-left-color: var(--orange); background: #2b3a4e; }
+.plan-commitments { display: grid; gap: 9px; margin-bottom: 12px; }
+.plan-commitment { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-left: 2px solid var(--orange); background: #24303f; }
+.plan-commitment time { min-width: 96px; color: var(--orange); font: 500 11px 'DM Mono', monospace; }
+.plan-commitment div { display: grid; gap: 3px; }
+.plan-commitment strong { font-size: 14px; }
+.plan-commitment small { color: var(--muted); font-size: 12px; }
+.checkbox-row { display: flex; align-items: center; gap: 9px; margin-top: 14px; color: var(--muted); font-size: 12px; }
+.checkbox-row input { width: 16px; height: 16px; accent-color: var(--cyan); }
+.reminder-note { margin-top: 12px; font-size: 11px; line-height: 1.6; }
+.task.is-objective label strong::after { content: ' ◆'; color: var(--cyan); font-size: 10px; }
+@media (max-width: 720px) { .plan-block time, .plan-commitment time { min-width: 78px; font-size: 11px; } }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   PANEL LAYOUT.
+
+   Five of the eleven panels were pinned to the full width and two more to a
+   named column, so most of the grid was single-column stripes with holes
+   punched beside the few cards that were not. The result read as broken rather
+   than dense.
+
+   Full width is now reserved for the three panels whose content genuinely
+   needs it — the briefing sentence, the training rows, and the three-up
+   performance strip. Everything else is a card in a two-column flow, and
+   `dense` lets a short card backfill the gap a wide one leaves above it.
+   The mobile breakpoint switches this whole grid to a single block, so none
+   of it applies on a phone.
+   ─────────────────────────────────────────────────────────────────────────── */
+.content-grid { grid-auto-flow: dense; align-items: start; }
+.objective-panel,
+.pulse-panel,
+.momentum-panel,
+.capture-panel,
+.social-panel,
+.signal-panel,
+.agenda-panel { grid-column: auto; }
+.briefing-panel,
+.training-panel,
+.performance-panel { grid-column: 1 / -1; }

@@ -1,4 +1,5 @@
 import { askAssistant, createCalendarEvent, isConnected, pullPocketAthleteTraining, requestDashboard, saveCapture, saveMetric, savePocketAthleteConfig, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
+import { buildPlan } from './src/planner.js';
 import { biometricFromMetric, canPushBiometrics, canReadTraining, pushBiometrics, readConfig as readPocketAthleteConfig, saveConfig as savePocketAthleteTokens } from './src/pocketathlete.js';
 
 const taskList = document.querySelector('#task-list');
@@ -31,6 +32,11 @@ let focusLog = JSON.parse(localStorage.getItem('jarvis-focus-log') || '[]');
 let pulseLog = JSON.parse(localStorage.getItem('jarvis-pulse-log') || '[]');
 let training = JSON.parse(localStorage.getItem('jarvis-training') || 'null') || { configured: false, sessions: [] };
 let calendarEvents = [];
+let plan = JSON.parse(localStorage.getItem('jarvis-plan') || 'null');
+// Which reminders have already been announced, so a notification fires once
+// rather than every time the scheduler ticks.
+let announced = new Set(JSON.parse(localStorage.getItem('jarvis-announced') || '[]'));
+let activeFocus = JSON.parse(localStorage.getItem('jarvis-active-focus') || 'null');
 
 function greeting() {
   const hour = new Date().getHours();
@@ -109,6 +115,12 @@ function loadProfileFields() {
 
 function updateSyncLabel() {
   syncLabel.textContent = isConnected() ? 'Google sync connected' : 'Local mode';
+  // These three said LOCAL AI, READY and CADENCE whatever was true. The first
+  // two now report whether the reasoning is running locally or on the backend,
+  // which is the one thing about them worth knowing.
+  const badge = isConnected() ? 'BACKEND' : 'LOCAL';
+  document.querySelector('#briefing-badge').textContent = badge;
+  document.querySelector('#assistant-badge').textContent = badge;
 }
 
 function collectLocalBackup() {
@@ -204,7 +216,7 @@ function renderMetrics() {
 function createTaskFromForm() {
   const title = document.querySelector('#task-title').value.trim();
   if (!title) return null;
-  return { id: Date.now(), title, detail: 'Added from command queue', type: document.querySelector('#task-type').value, priority: document.querySelector('#task-priority').value, dueAt: document.querySelector('#task-due').value, done: false };
+  return { id: Date.now(), title, detail: 'Added from command queue', type: document.querySelector('#task-type').value, priority: document.querySelector('#task-priority').value, dueAt: document.querySelector('#task-due').value, objective: document.querySelector('#task-objective').checked, done: false, completedAt: '' };
 }
 
 function applyDashboardSignals(dashboard) {
@@ -217,12 +229,19 @@ function applyDashboardSignals(dashboard) {
 }
 
 function notifyUpcoming() {
-  if (!('Notification' in window)) { showToast('This browser does not support reminders.'); return; }
-  if (Notification.permission === 'default') { Notification.requestPermission().then((permission) => { if (permission === 'granted') notifyUpcoming(); }); return; }
-  if (Notification.permission !== 'granted') { showToast('Reminders are blocked in browser settings.'); return; }
-  const upcoming = socialReminders.find((reminder) => !reminder.done && new Date(reminder.remindAt) > new Date() && new Date(reminder.remindAt) < new Date(Date.now() + 24 * 60 * 60 * 1000));
-  new Notification('JARVIS reminders enabled', { body: upcoming ? `${upcoming.channel}: ${upcoming.topic}` : 'I will keep an eye on your upcoming posting reminders.' });
-  showToast('Browser reminders are enabled.');
+  if (!('Notification' in window)) { showToast('This browser cannot show notifications. Due items are listed in the app.'); renderReminderNote(); return; }
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then((permission) => {
+      renderReminderNote();
+      if (permission === 'granted') { runScheduler(); showToast('Reminders on. JARVIS will tell you when something is due.'); }
+      else showToast('Reminders stayed off. Due items are still listed in the app.');
+    });
+    return;
+  }
+  if (Notification.permission !== 'granted') { showToast('Reminders are blocked in your browser settings for this site.'); renderReminderNote(); return; }
+  const pending = socialReminders.filter((reminder) => !reminder.done && new Date(reminder.remindAt) > new Date()).length;
+  runScheduler();
+  showToast(pending ? `Reminders on. ${pending} scheduled.` : 'Reminders on. Nothing scheduled yet.');
 }
 
 function renderTasks() {
@@ -252,7 +271,7 @@ function renderTasks() {
   }
   taskList.replaceChildren(...orderedTasks.map((task) => {
     const item = document.createElement('div');
-    item.className = `task ${task.done ? 'done' : ''}`;
+    item.className = `task ${task.done ? 'done' : ''}${task.objective ? ' is-objective' : ''}`;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `task-${task.id}`;
@@ -407,6 +426,7 @@ function renderMomentum() {
   const thisWeek = days.slice(7).reduce((total, day) => total + day.count, 0);
   const lastWeek = days.slice(0, 7).reduce((total, day) => total + day.count, 0);
   document.querySelector('#momentum-value').textContent = String(thisWeek);
+  document.querySelector('#momentum-unit').textContent = thisWeek === 1 ? ' move this week' : ' moves this week';
 
   const trend = document.querySelector('#momentum-trend');
   const change = thisWeek - lastWeek;
@@ -425,8 +445,9 @@ function renderMomentum() {
     return bar;
   }));
 
-  document.querySelector('#momentum-note').textContent = thisWeek || lastWeek
-    ? `${thisWeek + lastWeek} moves completed in the last fortnight.`
+  const fortnight = thisWeek + lastWeek;
+  document.querySelector('#momentum-note').textContent = fortnight
+    ? `${fortnight} move${fortnight === 1 ? '' : 's'} completed in the last fortnight.`
     : 'Complete a move and this starts tracking.';
 }
 
@@ -539,6 +560,176 @@ async function mirrorMetricToPocketAthlete(metric) {
   } catch (error) {
     showToast(`Metric logged. PocketAthlete: ${error.message}`);
   }
+}
+
+/**
+ * Render the plan.
+ *
+ * A block is a BUTTON, not a row: the point of a planned block is that you can
+ * start it. Clicking one begins a focus session of exactly that length against
+ * exactly that task, which is what ties the timer to the work rather than
+ * leaving it a stopwatch beside it.
+ */
+function renderPlan() {
+  const panel = document.querySelector('#plan-panel');
+  if (!plan || localDate(new Date(plan.builtAt)) !== localDate()) {
+    // A plan from yesterday is not a plan. It is dropped rather than shown.
+    if (plan) { plan = null; localStorage.removeItem('jarvis-plan'); }
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+
+  document.querySelector('#plan-commitments').replaceChildren(...plan.commitments.map((item) => {
+    const row = document.createElement('div');
+    row.className = 'plan-commitment';
+    const when = document.createElement('time');
+    when.textContent = 'COMMITMENT';
+    const copy = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = item.title;
+    const detail = document.createElement('small');
+    detail.textContent = item.detail;
+    copy.append(title, detail);
+    row.append(when, copy);
+    return row;
+  }));
+
+  document.querySelector('#plan-blocks').replaceChildren(...plan.blocks.map((block) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `plan-block${activeFocus && String(activeFocus.taskId) === String(block.taskId) ? ' is-active' : ''}`;
+    const when = document.createElement('time');
+    when.textContent = `${new Date(block.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–${new Date(block.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const copy = document.createElement('div');
+    const title = document.createElement('strong');
+    const task = tasks.find((item) => String(item.id) === String(block.taskId));
+    title.textContent = block.title;
+    if (task && task.done) title.style.textDecoration = 'line-through';
+    const detail = document.createElement('small');
+    detail.textContent = `${block.minutes} min • ${block.detail}`;
+    copy.append(title, detail);
+    const go = document.createElement('span');
+    go.className = 'plan-go';
+    go.textContent = task && task.done ? 'DONE' : 'START';
+    button.append(when, copy, go);
+    button.addEventListener('click', () => startFocus(block.minutes, block.taskId, block.title));
+    return button;
+  }));
+
+  const heading = document.querySelector('#plan-heading');
+  heading.textContent = plan.blocks.length ? `${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'}, ${plan.capacityMinutes} min still free` : 'Nothing scheduled';
+  document.querySelector('#plan-note').textContent = plan.note;
+}
+
+/**
+ * A focus session against a specific task.
+ *
+ * The timer used to be a bare 25-minute stopwatch that logged nothing about
+ * what it was for, so "focus time logged" could never answer "on what". A
+ * session now carries its task, and only a session that runs to zero is
+ * recorded — an abandoned one is not focus time.
+ */
+function startFocus(minutes, taskId, title) {
+  const button = document.querySelector('#focus-button');
+  if (focusTimer) { window.clearInterval(focusTimer); focusTimer = null; }
+  focusSeconds = Math.max(1, Math.round(minutes)) * 60;
+  activeFocus = { taskId: taskId ?? null, title: title || 'Focus', minutes: Math.round(minutes), startedAt: new Date().toISOString() };
+  localStorage.setItem('jarvis-active-focus', JSON.stringify(activeFocus));
+  button.title = `Pause: ${activeFocus.title}`;
+  // Painted immediately. setInterval's first tick is a second away, and a
+  // button that still reads ◉ after you press it looks like it did nothing.
+  button.textContent = `${String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:${String(focusSeconds % 60).padStart(2, '0')}`;
+  focusTimer = window.setInterval(tickFocus, 1000);
+  renderPlan();
+  showToast(`${activeFocus.minutes} minutes on “${activeFocus.title}”.`);
+}
+
+function tickFocus() {
+  const button = document.querySelector('#focus-button');
+  focusSeconds -= 1;
+  button.textContent = `${String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:${String(focusSeconds % 60).padStart(2, '0')}`;
+  if (focusSeconds > 0) return;
+  window.clearInterval(focusTimer);
+  focusTimer = null;
+  button.textContent = '◉';
+  button.title = 'Start a focus session';
+  const finished = activeFocus || { minutes: 25, taskId: null, title: 'Focus' };
+  focusLog = [...focusLog, { minutes: finished.minutes, taskId: finished.taskId, title: finished.title, completedAt: new Date().toISOString() }].slice(-200);
+  localStorage.setItem('jarvis-focus-log', JSON.stringify(focusLog));
+  activeFocus = null;
+  localStorage.removeItem('jarvis-active-focus');
+  renderPerformance();
+  renderPlan();
+  notify('Focus session complete', `${finished.minutes} minutes on ${finished.title}.`);
+  showToast(`Logged ${finished.minutes} minutes on “${finished.title}”.`);
+}
+
+/**
+ * ───────────────────────────────────────────────────────────────────────────
+ * REMINDERS THAT ACTUALLY FIRE.
+ *
+ * The reminder button used to show one notification the moment it was pressed
+ * and schedule nothing, so a posting reminder set for Thursday never arrived.
+ * This checks every minute for anything now due — a posting reminder, a task
+ * past its deadline, a training session still not done — and announces each
+ * one once.
+ *
+ * ITS LIMIT IS STATED IN THE UI RATHER THAN HIDDEN. A page can only run its
+ * timer while it is open. Firing reminders with the app closed needs Web Push
+ * and a server holding a subscription, which a static GitHub Pages site cannot
+ * be; promising it here would be the same trick in a new place. So anything
+ * that came due while you were away is reported on the next open instead.
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+function notify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+  try { new Notification(title, { body, tag: title, icon: 'manifest.webmanifest' }); return true; } catch (error) { return false; }
+}
+
+function dueItems(now = new Date()) {
+  const due = [];
+  socialReminders.filter((reminder) => !reminder.done && reminder.remindAt && new Date(reminder.remindAt) <= now)
+    .forEach((reminder) => due.push({ id: `social-${reminder.id}`, title: `Post: ${reminder.topic}`, body: `${reminder.channel} • due ${new Date(reminder.remindAt).toLocaleString()}` }));
+  tasks.filter((task) => !task.done && task.dueAt && new Date(task.dueAt) <= now)
+    .forEach((task) => due.push({ id: `task-${task.id}-${task.dueAt}`, title: `Overdue: ${task.title}`, body: `Was due ${new Date(task.dueAt).toLocaleString()}` }));
+  training.sessions.filter((session) => !session.done && session.date === localDate())
+    .forEach((session) => due.push({ id: `training-${session.id}-${session.date}`, title: `Training today: ${session.title}`, body: session.exerciseCount ? `${session.exerciseCount} exercises` : 'PocketAthlete session' }));
+  return due;
+}
+
+function runScheduler() {
+  const fresh = dueItems().filter((item) => !announced.has(item.id));
+  if (!fresh.length) return;
+  fresh.forEach((item) => { notify(item.title, item.body); announced.add(item.id); });
+  // Bounded, so a long-running install does not grow this forever.
+  announced = new Set([...announced].slice(-300));
+  localStorage.setItem('jarvis-announced', JSON.stringify([...announced]));
+  renderReminderNote();
+  if (Notification.permission !== 'granted') {
+    showToast(`${fresh.length} thing${fresh.length === 1 ? '' : 's'} due. Turn on reminders to be told as it happens.`);
+  }
+}
+
+function renderReminderNote() {
+  const note = document.querySelector('#reminder-note');
+  const pending = socialReminders.filter((reminder) => !reminder.done && reminder.remindAt && new Date(reminder.remindAt) > new Date()).length;
+  document.querySelector('#social-badge').textContent = `${pending} SCHEDULED`;
+  const permission = 'Notification' in window ? Notification.permission : 'unsupported';
+  note.textContent = permission === 'granted'
+    ? 'Reminders fire while JARVIS is open in a tab. Anything that came due while it was closed is shown the next time you open it.'
+    : permission === 'unsupported'
+      ? 'This browser cannot show notifications, so reminders appear here rather than as alerts.'
+      : 'Reminders are off. Turn them on with ♢ in the top bar to be told when something is due.';
+}
+
+/** What came due while the app was closed, said once on open. */
+function reportMissed() {
+  const missed = dueItems().filter((item) => !announced.has(item.id));
+  if (!missed.length) return;
+  addAssistantMessage(missed.length === 1
+    ? `While you were away: ${missed[0].title}.`
+    : `While you were away, ${missed.length} things came due: ${missed.slice(0, 4).map((item) => item.title).join('; ')}${missed.length > 4 ? '…' : ''}.`, 'assistant');
 }
 
 function showToast(message) {
@@ -721,7 +912,8 @@ document.querySelector('#social-form').addEventListener('submit', (event) => {
   renderSocialReminders();
   if (isConnected()) saveSocialReminder(reminder).catch(() => showToast('Reminder saved locally. Sync will retry later.'));
   document.querySelector('#social-topic').value = '';
-  showToast('Posting reminder added.');
+  renderReminderNote();
+  showToast(new Date(remindAt) > new Date() ? `Reminder set for ${new Date(remindAt).toLocaleString()}.` : 'That time has already passed, so it is due now.');
 });
 document.querySelector('#refresh-signals').addEventListener('click', async () => {
   if (!isConnected()) { renderEmails(); showToast('Connect Google sync to read important mail.'); return; }
@@ -768,27 +960,11 @@ document.querySelector('#focus-button').addEventListener('click', () => {
     showToast('Focus session paused.');
     return;
   }
-  focusSeconds = focusSeconds || 25 * 60;
-  button.title = 'Pause focus session';
-  focusTimer = window.setInterval(() => {
-    focusSeconds -= 1;
-    const minutes = String(Math.floor(focusSeconds / 60)).padStart(2, '0');
-    const seconds = String(focusSeconds % 60).padStart(2, '0');
-    button.textContent = `${minutes}:${seconds}`;
-    if (focusSeconds <= 0) {
-      window.clearInterval(focusTimer);
-      focusTimer = null;
-      button.textContent = '◉';
-      button.title = 'Start another focus session';
-      // Only a session that RAN TO ZERO is logged. Counting a paused one would
-      // make "focus time logged" the same kind of decoration it replaced.
-      focusLog = [...focusLog, { minutes: 25, completedAt: new Date().toISOString() }].slice(-200);
-      localStorage.setItem('jarvis-focus-log', JSON.stringify(focusLog));
-      renderPerformance();
-      showToast('Focus session complete. Log the win before moving on.');
-    }
-  }, 1000);
-  showToast('25-minute focus session started.');
+  if (activeFocus && focusSeconds > 0) { focusTimer = window.setInterval(tickFocus, 1000); button.title = `Pause: ${activeFocus.title}`; showToast('Focus session resumed.'); return; }
+  // No block chosen, so it runs against the top of the queue rather than
+  // against nothing — the timer should always know what it is for.
+  const next = tasks.find((task) => !task.done);
+  startFocus(25, next?.id ?? null, next?.title || 'Focus');
 });
 document.querySelector('#briefing-button').addEventListener('click', () => { refreshBriefing(); showToast('Briefing refreshed from your local queue.'); });
 document.querySelector('#review-button').addEventListener('click', () => {
@@ -822,10 +998,20 @@ document.querySelectorAll('[data-pulse]').forEach((button) => button.addEventLis
   showToast(`Pulse logged: ${pulse}. Your plan can adapt around it.`);
 }));
 document.querySelector('#plan-day').addEventListener('click', () => {
-  const pulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null')?.pulse;
-  const message = pulse === 'low' ? 'Low-energy plan: one essential study block, a lighter training session, and an early shutdown.' : pulse === 'sharp' ? 'High-energy plan: protect deep code work first, then use the afternoon for business decisions.' : 'Balanced plan: study first, train later, and leave one clean block for the business.';
-  document.querySelector('#hero-message').textContent = message;
-  showToast('Your day has been shaped around your current energy.');
+  const pulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null');
+  // Yesterday's energy is not today's. An old check-in is ignored rather than
+  // used to shape a day it knows nothing about.
+  const energy = pulse && localDate(new Date(pulse.savedAt)) === localDate() ? pulse.pulse : 'steady';
+  plan = { ...buildPlan({ now: new Date(), events: calendarEvents, training: training.sessions.filter((session) => session.date === localDate()), tasks, energy }), builtAt: new Date().toISOString(), energy };
+  localStorage.setItem('jarvis-plan', JSON.stringify(plan));
+  renderPlan();
+  document.querySelector('#plan-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  showToast(plan.blocks.length ? `Planned ${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'} around your commitments.` : 'Nothing to schedule right now.');
+});
+document.querySelector('#plan-clear').addEventListener('click', () => {
+  plan = null;
+  localStorage.removeItem('jarvis-plan');
+  renderPlan();
 });
 document.querySelector('#sync-control').addEventListener('click', async () => {
   const syncDialog = document.querySelector('#sync-dialog');
@@ -1002,6 +1188,7 @@ document.querySelector('#readiness-form').addEventListener('submit', async (even
 
 renderTasks();
 refreshBriefing();
+renderPlan();
 renderEmails();
 renderSocialReminders();
 renderMetrics();
@@ -1014,6 +1201,21 @@ renderPerformance();
 updateDate();
 loadProfileFields();
 updateSyncLabel();
+renderReminderNote();
+reportMissed();
+runScheduler();
+// Every minute: often enough that a reminder lands when it is due, rare enough
+// to cost nothing. Also on focus, so a tab left open overnight catches up the
+// moment you come back to it rather than on the next tick.
+window.setInterval(runScheduler, 60000);
+window.addEventListener('focus', runScheduler);
+// A focus session interrupted by a reload should not silently vanish.
+if (activeFocus) { document.querySelector('#focus-button').title = `Resume: ${activeFocus.title}`; }
+
+// The manifest promised an installable app with nothing to serve it offline.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 const savedPulse = JSON.parse(localStorage.getItem('jarvis-pulse') || 'null');
 if (savedPulse) pulseStatus.textContent = savedPulse.pulse.toUpperCase();
 
@@ -1034,8 +1236,10 @@ function renderObjective() {
   const copy = document.querySelector('#objective-copy');
   const progress = document.querySelector('#objective-progress');
   if (!objective) { copy.textContent = 'Choose the outcome that would make this week feel meaningful.'; progress.textContent = '0%'; return; }
-  copy.textContent = objective.text;
-  const matching = tasks.filter((task) => task.type === objective.area || objective.text.toLowerCase().includes(task.type));
-  const completed = matching.filter((task) => task.done).length;
-  progress.textContent = `${matching.length ? Math.min(100, Math.round((completed / matching.length) * 100)) : 0}%`;
+  const linked = tasks.filter((task) => task.objective);
+  const completed = linked.filter((task) => task.done).length;
+  copy.textContent = linked.length
+    ? `${objective.text} — ${completed} of ${linked.length} linked moves done.`
+    : `${objective.text} — tick “counts toward this week's objective” when adding a move to track it here.`;
+  progress.textContent = `${linked.length ? Math.round((completed / linked.length) * 100) : 0}%`;
 }

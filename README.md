@@ -139,6 +139,78 @@ then escapes the whole description, so a joining comma and a comma inside a name
 *count* is exact; the names are shown as the sentence the feed sent rather than
 split into a list that would sometimes be wrong.
 
+## What each control actually does
+
+Several features looked like features and did nothing. They now do the thing
+their label promises, or say plainly what they cannot do.
+
+### Plan my day
+
+It used to print one of three fixed sentences chosen by the energy button. It
+now builds a real schedule: it takes the hours left before your shutdown hour,
+removes your Google Calendar events (merging overlapping ones, so nothing is
+scheduled inside a meeting), orders your open work — overdue first, then due
+today, then by priority — and lays it into the gaps in blocks.
+
+Your energy check-in changes the shape rather than the wording: 50-minute blocks
+when you log **sharp**, 40 when **steady**, 25 with more recovery and fewer of
+them when **low**. A check-in from yesterday is ignored rather than used to
+shape a day it knows nothing about.
+
+A PocketAthlete session is listed as a **commitment without a time**, because
+the feed has none — the programme is ordered, not scheduled. It still costs
+capacity, so a training day plans lighter. That is the difference between using
+what the feed knows and inventing an 18:00 it does not.
+
+Each block is a button. Clicking one starts a focus session of exactly that
+length against exactly that task.
+
+The planner is a pure function in `src/planner.js` with no storage or DOM
+access, so its rules are tested against fixed inputs rather than by clicking the
+button and reading the copy.
+
+### Focus sessions
+
+The timer was a 25-minute stopwatch that recorded nothing about what it was for.
+A session now carries its task, and only a session that runs to zero is logged —
+an abandoned one is not focus time. Pressing the timer with no block chosen runs
+it against the top of your queue rather than against nothing.
+
+### Reminders
+
+The reminder button used to show one notification the moment you pressed it and
+schedule nothing, so a posting reminder set for Thursday never arrived. A
+scheduler now checks every minute for anything due — a posting reminder, a task
+past its deadline, a training session still not done — and announces each one
+once.
+
+**Its limit is stated in the app rather than hidden.** A page can only run its
+timer while it is open. Firing reminders with the app closed needs Web Push and
+a server holding a subscription, which a static GitHub Pages site cannot be, so
+anything that came due while you were away is reported on your next visit
+instead of being silently lost.
+
+### Weekly objective
+
+Progress was a string-similarity guess: it matched tasks whose type appeared
+somewhere in the objective's wording. You now tick **counts toward this week's
+objective** when adding a move, and progress is those moves. Linked moves are
+marked with a ◆ in the queue.
+
+### Offline
+
+The repository shipped a web manifest with no service worker behind it, so the
+app advertised itself as installable and then needed the network to open. `sw.js`
+caches the shell — cache-first for the static files, and never for the Apps
+Script backend or the PocketAthlete Worker, because a stale copy of your
+training programme or your inbox is worse than an honest failure.
+
+### Status badges
+
+`LOCAL AI`, `READY` and `CADENCE` were decoration that never changed. The first
+two now report whether reasoning is running locally or on the backend; the third
+counts the reminders actually scheduled.
+
 ## No demo data
 
 The app previously shipped with seeded content: three example tasks, a name, a

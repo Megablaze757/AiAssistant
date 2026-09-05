@@ -120,3 +120,7 @@
 .briefing-panel,
 .training-panel,
 .performance-panel { grid-column: 1 / -1; }
+
+/* Offline answers can be lists — what is due, what is open — so the newlines
+   in them have to survive. */
+.assistant-message p { white-space: pre-line; }

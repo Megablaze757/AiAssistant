@@ -1,5 +1,7 @@
 import { askAssistant, createCalendarEvent, isConnected, pullPocketAthleteTraining, requestDashboard, saveCapture, saveMetric, savePocketAthleteConfig, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
 import { buildPlan } from './src/planner.js';
+import { buildBriefing } from './src/briefing.js';
+import { CAPABILITIES, matchTask, parseCommand } from './src/commands.js';
 import { biometricFromMetric, canPushBiometrics, canReadTraining, pushBiometrics, readConfig as readPocketAthleteConfig, saveConfig as savePocketAthleteTokens } from './src/pocketathlete.js';
 
 const taskList = document.querySelector('#task-list');
@@ -32,6 +34,7 @@ let focusLog = JSON.parse(localStorage.getItem('jarvis-focus-log') || '[]');
 let pulseLog = JSON.parse(localStorage.getItem('jarvis-pulse-log') || '[]');
 let training = JSON.parse(localStorage.getItem('jarvis-training') || 'null') || { configured: false, sessions: [] };
 let calendarEvents = [];
+let latestEmails = [];
 let plan = JSON.parse(localStorage.getItem('jarvis-plan') || 'null');
 // Which reminders have already been announced, so a notification fires once
 // rather than every time the scheduler ticks.
@@ -154,6 +157,7 @@ function restoreLocalBackup(backup) {
 }
 
 function renderEmails(emails = []) {
+  latestEmails = emails;
   emailList.replaceChildren();
   if (!emails.length) {
     const empty = document.createElement('p');
@@ -541,6 +545,7 @@ function applyTraining(payload) {
   renderTraining();
   renderTrainingCard();
   renderAgenda();
+  refreshBriefing();
 }
 
 /**
@@ -738,16 +743,36 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove('show'), 2400);
 }
 
+function briefingState() {
+  return {
+    now: new Date(),
+    tasks,
+    calendar: calendarEvents,
+    training: training.sessions,
+    plan,
+    pulse: JSON.parse(localStorage.getItem('jarvis-pulse') || 'null'),
+    emails: latestEmails,
+    objective,
+    focusLog
+  };
+}
+
+/**
+ * The briefing, and the hero line above it.
+ *
+ * Both come from one ranking in src/briefing.js, so the headline and the
+ * paragraph under it cannot disagree about what today is about — which they
+ * could when the hero was a fixed sentence in the markup and the briefing was
+ * a separate three-branch template.
+ */
 function refreshBriefing() {
-  const openTasks = tasks.filter((task) => !task.done);
-  const businessTasks = openTasks.filter((task) => task.type === 'business');
-  if (!openTasks.length) {
-    briefingCopy.textContent = 'Your queue is clear. Use the space to plan tomorrow or record what worked today.';
-  } else if (businessTasks.length) {
-    briefingCopy.textContent = `Start with “${businessTasks[0].title}”. It keeps your business signal visible before the day gets noisy.`;
-  } else {
-    briefingCopy.textContent = `Start with “${openTasks[0].title}”, then protect the first deep-work block before opening new work.`;
-  }
+  const briefing = buildBriefing(briefingState());
+  briefingCopy.textContent = briefing.note;
+  document.querySelector('#hero-message').textContent = briefing.lead;
+  const rest = briefing.signals.slice(1, 3).map((signal) => signal.lead);
+  document.querySelector('#hero-note').textContent = rest.length
+    ? `Then: ${rest.join(' ')}`
+    : 'Nothing else is competing for your attention right now.';
 }
 
 function addAssistantMessage(text, role) {
@@ -762,32 +787,111 @@ function addAssistantMessage(text, role) {
   assistantLog.scrollTop = assistantLog.scrollHeight;
 }
 
+/**
+ * Execute one offline instruction.
+ *
+ * The parse happens in src/commands.js and returns an intent; this does the
+ * work and answers in words. Keeping those apart is what makes the offline
+ * path testable — and it is why a misread instruction now shows up as the
+ * wrong intent rather than as a plausible sentence about something that did
+ * not happen.
+ *
+ * Every branch reports what it actually did, including when the answer is that
+ * it could not find what you named.
+ */
 function handleAssistantCommand(command) {
-  const normalized = command.toLowerCase();
-  if (normalized.includes('add') || normalized.includes('create')) {
-    const title = command.replace(/^(add|create)(\s+a)?(\s+task)?(\s+to)?\s*/i, '').trim() || 'New JARVIS task';
-    const task = { id: Date.now(), title, detail: 'Added through command line', type: normalized.includes('business') ? 'business' : 'task', priority: 'medium', dueAt: '', done: false };
+  const parsed = parseCommand(command, { tasks, now: new Date() });
+
+  if (parsed.intent === 'add') {
+    const task = { id: Date.now(), title: parsed.title, detail: 'Added from the command line', type: parsed.area, priority: parsed.priority, dueAt: parsed.dueAt, objective: false, done: false, completedAt: '' };
     tasks.push(task);
-    localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
+    persistTasks();
     renderTasks();
     refreshBriefing();
     if (isConnected()) saveTask(task).catch(() => showToast('Added locally. Sync will retry later.'));
-    return `Added “${title}” to your queue.`;
+    const when = parsed.dueAt ? `, due ${new Date(parsed.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : '';
+    return `Added “${task.title}” as ${parsed.priority} priority ${parsed.area} work${when}.`;
   }
-  if (normalized.includes('open') || normalized.includes('next') || normalized.includes('should')) {
-    const next = tasks.find((task) => !task.done);
-    return next ? `Your next move is “${next.title}”. ${next.detail}.` : 'Your queue is clear. This is a good moment to plan the next meaningful outcome.';
-  }
-  if (normalized.includes('complete') || normalized.includes('done')) {
-    const next = tasks.find((task) => !task.done);
-    if (!next) return 'There are no open tasks to complete.';
-    setTaskDone(next, true);
+
+  if (parsed.intent === 'complete') {
+    if (!parsed.task) return `I could not find an open move matching “${parsed.query}”. Try the exact words from the queue.`;
+    setTaskDone(parsed.task, true);
     renderTasks();
     refreshBriefing();
-    if (isConnected()) updateTask(next).catch(() => showToast('Completed locally. Sync will retry later.'));
-    return `Marked “${next.title}” complete. Keep the momentum intentional.`;
+    if (isConnected()) updateTask(parsed.task).catch(() => showToast('Completed locally. Sync will retry later.'));
+    const left = tasks.filter((task) => !task.done).length;
+    return `Marked “${parsed.task.title}” complete. ${left ? `${left} still open.` : 'That was the last one.'}`;
   }
-  return 'I can help with your next move, open work, or adding a task. Connect the Apps Script backend for richer AI reasoning.';
+
+  if (parsed.intent === 'due') {
+    const dated = tasks.filter((task) => !task.done && task.dueAt).sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
+    if (!dated.length) return 'Nothing in your queue has a deadline on it.';
+    const now = new Date();
+    return dated.slice(0, 5).map((task) => {
+      const due = new Date(task.dueAt);
+      return `${due < now ? 'OVERDUE' : due.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} — ${task.title}`;
+    }).join('\n');
+  }
+
+  if (parsed.intent === 'list') {
+    const open = tasks.filter((task) => !task.done && (!parsed.area || task.type === parsed.area));
+    if (!open.length) return parsed.area ? `Nothing open under ${parsed.area}.` : 'Your queue is clear.';
+    return `${open.length} open${parsed.area ? ` in ${parsed.area}` : ''}:\n${open.slice(0, 8).map((task) => `${(task.priority || 'medium').toUpperCase()} — ${task.title}`).join('\n')}`;
+  }
+
+  if (parsed.intent === 'plan') { document.querySelector('#plan-day').click(); return plan?.blocks?.length ? `Planned ${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'}. It is in Today's plan above.` : plan?.note || 'Nothing to schedule.'; }
+
+  if (parsed.intent === 'focus') {
+    if (parsed.query && !parsed.task) return `I could not find an open move matching “${parsed.query}”.`;
+    const target = parsed.task || tasks.find((task) => !task.done);
+    if (!target) return 'Nothing is open to focus on. Add a move first.';
+    startFocus(parsed.minutes, target.id, target.title);
+    return `${parsed.minutes} minutes on “${target.title}”. The timer is running in the top bar.`;
+  }
+
+  if (parsed.intent === 'pulse') { document.querySelector(`[data-pulse="${parsed.pulse}"]`)?.click(); return `Logged your energy as ${parsed.pulse}. Plan the day again and the blocks will resize around it.`; }
+
+  if (parsed.intent === 'metric') {
+    const metric = { id: Date.now(), name: parsed.name, value: parsed.value, area: parsed.area, unit: parsed.unit, createdAt: new Date().toISOString() };
+    metrics.push(metric);
+    localStorage.setItem('jarvis-metrics', JSON.stringify(metrics));
+    renderMetrics();
+    renderLifeGrid();
+    if (isConnected()) saveMetric(metric).catch(() => null);
+    mirrorMetricToPocketAthlete(metric);
+    return `Logged ${parsed.name} ${parsed.value}${parsed.unit} under ${parsed.area}.`;
+  }
+
+  if (parsed.intent === 'objective') {
+    objective = { text: parsed.text, savedAt: new Date().toISOString() };
+    localStorage.setItem('jarvis-objective', JSON.stringify(objective));
+    renderObjective();
+    refreshBriefing();
+    return `Weekly objective set: “${parsed.text}”. Tick “counts toward this week's objective” on the moves that serve it.`;
+  }
+
+  if (parsed.intent === 'training') {
+    const today = training.sessions.filter((session) => session.date === localDate());
+    if (!training.configured) return 'PocketAthlete is not connected. Add your training feed token in the PocketAthlete panel.';
+    if (!today.length) return training.sessions.length ? `Nothing scheduled today. Next up: ${training.sessions.find((session) => !session.done)?.title || 'nothing planned'}.` : 'No sessions in your programme yet.';
+    return today.map((session) => `${session.done ? 'Done' : 'Planned'} — ${session.title}${session.exerciseCount ? ` (${session.exerciseCount} exercises)` : ''}`).join('\n');
+  }
+
+  if (parsed.intent === 'briefing') {
+    const briefing = buildBriefing(briefingState());
+    return `${briefing.lead} ${briefing.note}`;
+  }
+
+  if (parsed.intent === 'help' || parsed.intent === 'unknown') {
+    // The old fallback apologised and named a feature you might not have. This
+    // lists what it can genuinely do right now, without a key or a network.
+    const opener = parsed.intent === 'help'
+      ? 'Offline I can do these, exactly as written:'
+      : `I did not understand that.${parsed.reason ? ` ${parsed.reason}` : ''} Offline I understand these:`;
+    return `${opener}\n${CAPABILITIES.map((line) => `• ${line}`).join('\n')}${isConnected() ? '' : '\nConnect Google sync, and add GROQ_API_KEY in Apps Script, for free-form language and screenshots.'}`;
+  }
+
+  return 'Say that again?';
 }
 
 function renderAssistantProposals(result) {
@@ -860,6 +964,7 @@ taskList.addEventListener('change', (event) => {
   setTaskDone(task, event.target.checked);
   renderTasks();
   if (isConnected()) updateTask(task).catch(() => showToast('Updated locally. Sync will retry later.'));
+  refreshBriefing();
   showToast(task.done ? 'Move completed.' : 'Move restored.');
 });
 
@@ -875,6 +980,7 @@ document.querySelector('#task-form').addEventListener('submit', (event) => {
   if (isConnected()) saveTask(task).catch(() => showToast('Added locally. Sync will retry later.'));
   document.querySelector('#task-form').reset();
   document.querySelector('#task-dialog').close();
+  refreshBriefing();
   showToast('Added to your command queue.');
 });
 
@@ -917,7 +1023,7 @@ document.querySelector('#social-form').addEventListener('submit', (event) => {
 });
 document.querySelector('#refresh-signals').addEventListener('click', async () => {
   if (!isConnected()) { renderEmails(); showToast('Connect Google sync to read important mail.'); return; }
-  try { applyDashboardSignals(await requestDashboard()); showToast('Signals refreshed.'); } catch (error) { showToast('Could not refresh inbox signals.'); }
+  try { applyDashboardSignals(await requestDashboard()); refreshBriefing(); showToast('Signals refreshed.'); } catch (error) { showToast('Could not refresh inbox signals.'); }
 });
 document.querySelector('#notify-button').addEventListener('click', notifyUpcoming);
 document.querySelector('#metric-form').addEventListener('submit', (event) => {
@@ -946,6 +1052,7 @@ document.querySelector('#objective-form').addEventListener('submit', (event) => 
   objective = { text, area, savedAt: new Date().toISOString() };
   localStorage.setItem('jarvis-objective', JSON.stringify(objective));
   renderObjective();
+  refreshBriefing();
   document.querySelector('#objective-input').value = '';
   showToast('Weekly objective set.');
 });
@@ -966,7 +1073,11 @@ document.querySelector('#focus-button').addEventListener('click', () => {
   const next = tasks.find((task) => !task.done);
   startFocus(25, next?.id ?? null, next?.title || 'Focus');
 });
-document.querySelector('#briefing-button').addEventListener('click', () => { refreshBriefing(); showToast('Briefing refreshed from your local queue.'); });
+document.querySelector('#briefing-button').addEventListener('click', () => {
+  refreshBriefing();
+  const count = buildBriefing(briefingState()).signals.length;
+  showToast(count ? `Re-read ${count} signal${count === 1 ? '' : 's'}.` : 'Nothing is competing for your attention.');
+});
 document.querySelector('#review-button').addEventListener('click', () => {
   document.querySelector('#review-dialog').showModal();
 });
@@ -994,6 +1105,7 @@ document.querySelectorAll('[data-pulse]').forEach((button) => button.addEventLis
   localStorage.setItem('jarvis-pulse-log', JSON.stringify(pulseLog));
   pulseStatus.textContent = pulse.toUpperCase();
   renderPerformance();
+  refreshBriefing();
   if (isConnected()) savePulse(pulse).catch(() => showToast('Saved locally. Sync will retry when the backend returns.'));
   showToast(`Pulse logged: ${pulse}. Your plan can adapt around it.`);
 }));
@@ -1005,6 +1117,7 @@ document.querySelector('#plan-day').addEventListener('click', () => {
   plan = { ...buildPlan({ now: new Date(), events: calendarEvents, training: training.sessions.filter((session) => session.date === localDate()), tasks, energy }), builtAt: new Date().toISOString(), energy };
   localStorage.setItem('jarvis-plan', JSON.stringify(plan));
   renderPlan();
+  refreshBriefing();
   document.querySelector('#plan-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   showToast(plan.blocks.length ? `Planned ${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'} around your commitments.` : 'Nothing to schedule right now.');
 });
@@ -1012,6 +1125,7 @@ document.querySelector('#plan-clear').addEventListener('click', () => {
   plan = null;
   localStorage.removeItem('jarvis-plan');
   renderPlan();
+  refreshBriefing();
 });
 document.querySelector('#sync-control').addEventListener('click', async () => {
   const syncDialog = document.querySelector('#sync-dialog');
@@ -1082,6 +1196,14 @@ document.querySelector('#sync-form').addEventListener('submit', async (event) =>
   }
 });
 document.querySelector('#assistant-form').addEventListener('submit', (event) => { event.preventDefault(); submitAssistantCommand(assistantInput.value); });
+// Enter sends; Shift+Enter starts a new line. The input is a textarea so that a
+// pasted timetable can be several lines, but that also meant Enter typed a
+// newline into a command line and nothing was ever sent by pressing it.
+assistantInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  submitAssistantCommand(assistantInput.value);
+});
 document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => submitAssistantCommand(button.dataset.command)));
 document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
   const view = button.dataset.view;
@@ -1187,7 +1309,6 @@ document.querySelector('#readiness-form').addEventListener('submit', async (even
 });
 
 renderTasks();
-refreshBriefing();
 renderPlan();
 renderEmails();
 renderSocialReminders();
@@ -1198,6 +1319,7 @@ renderAgenda();
 renderLifeGrid();
 renderMomentum();
 renderPerformance();
+refreshBriefing();
 updateDate();
 loadProfileFields();
 updateSyncLabel();

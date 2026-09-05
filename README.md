@@ -190,6 +190,64 @@ a server holding a subscription, which a static GitHub Pages site cannot be, so
 anything that came due while you were away is reported on your next visit
 instead of being silently lost.
 
+### The briefing and the hero line
+
+The briefing was a three-branch template — empty queue, else the first task
+tagged business, else the first task — with a fixed second clause bolted on. It
+ignored deadlines, the calendar, training, energy, the objective and the inbox,
+and it preferred anything tagged "business" over work that was actually overdue.
+The hero line above it was a fixed sentence in the markup.
+
+`src/briefing.js` now reads every source and ranks what it finds by severity
+computed from the data: how overdue, how soon, how many. The hero shows the
+top-ranked signal, the briefing shows the top three, and the two come from one
+ranking so they cannot disagree about what today is about. If nothing is
+pressing it says so rather than inventing something.
+
+A signal is only produced when the data supports it — there is no branch that
+invents a sentence to fill the space.
+
+### The command line, offline
+
+The old parser matched three substrings anywhere in the input. "add" won on
+*"I finished adding the report"*, so that created a task; "done" and "complete"
+both acted on whichever task happened to be first rather than the one you named;
+and every task it made was medium priority with no due date, because nothing was
+read out of the text.
+
+`src/commands.js` parses instead, returning a structured intent that the app
+executes. Verbs are anchored to the start of the instruction, so a sentence that
+merely mentions "add" is not an add.
+
+It reads the details out of what you typed:
+
+```
+add urgent finish the coursework by friday 5pm
+  → title "Finish the coursework", high priority, study, due Friday 17:00
+```
+
+Dates it understands: `today`, `tonight`, `tomorrow`, a weekday name (always
+forward — "friday" on a Friday means the next one), `next week`, `in 3 days`,
+`in 2 hours`, and clock times like `5pm` or `at 14:30`. A bare time that has
+already passed rolls to tomorrow. Whatever it consumes is removed from the
+title, so you don't get a task called "Finish the coursework by friday" that
+also has a due date.
+
+Other commands: `complete <name>` (matched on word overlap against your open
+work, and it says so when nothing matches rather than closing something else),
+`what is due`, `show my open study work`, `plan my day`, `focus 40 on the
+coursework`, `log sleep 7.5h`, `objective <text>`, `i'm feeling low`, and
+`help`, which lists what it can actually do. Anything it does not understand
+says so and shows the same list — it never guesses and acts anyway.
+
+This is a command parser, not an imitation of a model. With `GROQ_API_KEY` set
+in Apps Script the backend handles free-form language and screenshots; the above
+is what remains true with no key and no network.
+
+Enter sends; Shift+Enter starts a new line. The box is a textarea so a pasted
+timetable can be several lines, which previously meant Enter typed a newline and
+never sent anything.
+
 ### Weekly objective
 
 Progress was a string-similarity guess: it matched tasks whose type appeared

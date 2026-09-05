@@ -321,7 +321,7 @@ async function submitAssistantCommand(command) {
   pendingImage = '';
   attachmentName.textContent = '';
   if (!isConnected()) {
-    window.setTimeout(() => addAssistantMessage(image ? 'I have the image, but real image understanding starts after Google sync and Gemini are connected.' : handleAssistantCommand(command), 'assistant'), 180);
+    window.setTimeout(() => addAssistantMessage(image ? 'I have the image, but real image understanding starts after Google sync and Groq are connected.' : handleAssistantCommand(command), 'assistant'), 180);
     return;
   }
   addAssistantMessage('Reading that now...', 'assistant');

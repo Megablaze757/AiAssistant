@@ -24,4 +24,4 @@ For Sasha specifically, the core object is not a generic task. It is a **day** w
 
 PocketAthlete publicly describes readiness, sleep, soreness, training load, workouts, personal records, position-specific plans, and on-device video analysis. That makes it the specialist training system in the stack. JARVIS should not duplicate its coaching logic. It should use PocketAthlete's official export/API, once available, to answer a different question: given today's readiness and training load, what is the smartest overall day across university, gym, coding, business, and recovery?
 
-The current frontend implements local briefing, categorized capture, focus mode, and daily shutdown. Calendar scheduling, Gemini-backed reasoning, and synced analytics should be added only after the Apps Script request/response contract is available.
+The current frontend implements local briefing, categorized capture, focus mode, and daily shutdown. Calendar scheduling, Groq-backed reasoning, and synced analytics should be added only after the Apps Script request/response contract is available.

@@ -4,7 +4,7 @@ A dependency-free first slice of a personal assistant designed for GitHub Pages 
 
 ## Launch without an AI token
 
-Yes. The app launches and remains useful without any token. Local mode supports tasks, priorities, due dates, focus sessions, weekly objectives, metrics, reviews, social reminders, and offline storage. Apps Script can also provide Calendar/Gmail/Sheets access after its Google permissions are approved. `GEMINI_API_KEY` is optional: it enables screenshot understanding, timetable extraction, homework parsing, and deeper reasoning. Without it, Apps Script returns a small token-free text fallback instead of failing.
+Yes. The app launches and remains useful without any token. Local mode supports tasks, priorities, due dates, focus sessions, weekly objectives, metrics, reviews, social reminders, and offline storage. Apps Script can also provide Calendar/Gmail/Sheets access after its Google permissions are approved. `GROQ_API_KEY` is optional: it enables screenshot understanding, timetable extraction, homework parsing, and deeper reasoning. Without it, Apps Script returns a small token-free text fallback instead of failing.
 
 ## V2 operating model
 
@@ -56,15 +56,21 @@ The local demo path should remain available so the app is usable during developm
 
 You can also connect without editing code: open the app, select the sync status at the bottom of the sidebar, paste the Apps Script `/exec` URL, and choose **Connect**. The URL is stored only in that browser's local storage. Clear the field to return to local demo mode.
 
-## AI inbox setup
+## AI inbox setup with Groq
 
-The AI inbox accepts text and image attachments. To enable real Gemini responses, open Apps Script **Project Settings → Script properties**, add `GEMINI_API_KEY`, and keep the value there. Never place that key in this GitHub repository or in frontend code. JARVIS returns proposals first; calendar events are not created until you approve them.
+The AI inbox accepts text and image attachments. To enable Groq responses, open Apps Script **Project Settings -> Script properties** and add `GROQ_API_KEY`. Optionally add `GROQ_MODEL`; the default is `meta-llama/llama-4-scout-17b-16e-instruct`. Keep the key in Apps Script properties only. Never place it in this GitHub repository, GitHub Actions, or frontend code. JARVIS returns proposals first; calendar events are not created until you approve them.
 
-The current command line uses a small local intent parser so the workflow can be tested immediately. Once the backend is connected, the same command surface can send structured requests to Gemini through Apps Script and return approved actions such as task creation, calendar proposals, and daily summaries.
+Because the key was pasted into chat, rotate it in the Groq console and use the replacement value in Apps Script.
+
+## GitHub Pages deployment
+
+The repository includes `.github/workflows/pages.yml`. In GitHub, open **Settings -> Pages**, choose **GitHub Actions** as the source, and push to `main`. GitHub will publish the static app at `https://<your-username>.github.io/AiAssistant/`. The Apps Script URL is configured from inside the app and is not committed to the repository.
+
+The current command line uses a small local intent parser so the workflow can be tested immediately. Once the backend is connected, the same command surface can send structured requests to Groq through Apps Script and return approved actions such as task creation, calendar proposals, and daily summaries.
 
 ## Email and social signals
 
-When Google sync is connected, Apps Script reads only a narrow Gmail query: unread messages from the last three days that are marked important or starred, excluding promotions and social mail. JARVIS receives sender, subject, date, and a short snippet. It does not forward the whole inbox to Gemini. Social reminders are stored in the `Social` sheet and can later create approved Calendar events.
+When Google sync is connected, Apps Script reads only a narrow Gmail query: unread messages from the last three days that are marked important or starred, excluding promotions and social mail. JARVIS receives sender, subject, date, and a short snippet. It does not forward the whole inbox to Groq. Social reminders are stored in the `Social` sheet and can later create approved Calendar events.
 
 ## PocketAthlete sync
 

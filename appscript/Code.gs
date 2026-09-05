@@ -8,7 +8,9 @@
  * 4. Deploy -> New deployment -> Web app.
  *    Execute as: Me
  *    Who has access: Anyone with the link
- * 5. Copy the /exec URL into the frontend API configuration.
+ * 5. In Project Settings -> Script properties, add GROQ_API_KEY.
+ *    Optional: add GROQ_MODEL (default: meta-llama/llama-4-scout-17b-16e-instruct).
+ * 6. Copy the /exec URL into the frontend API configuration.
  *
  * Browser requests should use text/plain for POST bodies. This avoids a
  * browser preflight request, which Apps Script web apps do not handle well.
@@ -234,36 +236,37 @@ function syncPocketAthleteWorkout_(request) {
 }
 
 function askAssistant_(request) {
-  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  const properties = PropertiesService.getScriptProperties();
+  const key = properties.getProperty('GROQ_API_KEY');
   const message = required_(request.message, 'message');
   if (!key) return localAssistantFallback_(message, request.image);
   const context = request.context || {};
-  const parts = [{ text: `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. User context: ${JSON.stringify(context)}. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal","priority":"high|medium|low","dueAt":"ISO 8601 or empty"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}` }];
+  const prompt = `You are JARVIS, a private assistant for a university student who codes, trains, and runs a business. User context: ${JSON.stringify(context)}. Read the user's message and optional image. Extract only useful, actionable items. Never invent missing dates or times. If a date or time is ambiguous, put it in questions. Return JSON only in this exact shape: {"reply":"short helpful response","questions":["..."],"tasks":[{"title":"...","detail":"...","type":"study|training|coding|business|personal","priority":"high|medium|low","dueAt":"ISO 8601 or empty"}],"events":[{"title":"...","start":"ISO 8601 or empty","end":"ISO 8601 or empty","description":"...","needsConfirmation":true}]}. User message: ${message}`;
+  const userContent = [{ type: 'text', text: prompt }];
   if (request.image) {
     const imageParts = request.image.split(',');
     if (imageParts.length !== 2) throw new Error('Image attachment format is invalid.');
-    const mimeType = imageParts[0].match(/^data:(image\/[a-zA-Z0-9.+-]+);base64$/)?.[1];
-    if (!mimeType) throw new Error('Only image attachments are supported.');
-    parts.push({ inlineData: { mimeType: mimeType, data: imageParts[1] } });
+    if (!imageParts[0].match(/^data:image\/[a-zA-Z0-9.+-]+;base64$/)) throw new Error('Only image attachments are supported.');
+    userContent.push({ type: 'image_url', image_url: { url: request.image } });
   }
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
-  const response = UrlFetchApp.fetch(endpoint, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }), muteHttpExceptions: true });
-  if (response.getResponseCode() >= 300) throw new Error(`Gemini request failed (${response.getResponseCode()}).`);
+  const model = properties.getProperty('GROQ_MODEL') || 'meta-llama/llama-4-scout-17b-16e-instruct';
+  const response = UrlFetchApp.fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'post', contentType: 'application/json', headers: { Authorization: `Bearer ${key}` }, payload: JSON.stringify({ model: model, messages: [{ role: 'system', content: 'Return valid JSON only.' }, { role: 'user', content: userContent }], temperature: 0.2, response_format: { type: 'json_object' } }), muteHttpExceptions: true });
+  if (response.getResponseCode() >= 300) throw new Error(`Groq request failed (${response.getResponseCode()}).`);
   const body = JSON.parse(response.getContentText());
-  const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini returned no assistant response.');
+  const text = body.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Groq returned no assistant response.');
   return JSON.parse(text.replace(/^```json\s*/, '').replace(/\s*```$/, ''));
 }
 
 function localAssistantFallback_(message, image) {
-  if (image) return { reply: 'This deployment is running without an AI token, so I cannot read images yet. Text commands, tasks, Calendar, Gmail signals, and reviews still work.', questions: ['Add GEMINI_API_KEY later to enable timetable and homework screenshot understanding.'], tasks: [], events: [], mode: 'local' };
+  if (image) return { reply: 'This deployment is running without an AI token, so I cannot read images yet. Text commands, tasks, Calendar, Gmail signals, and reviews still work.', questions: ['Add GROQ_API_KEY later to enable timetable and homework screenshot understanding.'], tasks: [], events: [], mode: 'local' };
   const lowerMessage = message.toLowerCase();
   const isTaskRequest = lowerMessage.indexOf('add') >= 0 || lowerMessage.indexOf('create') >= 0;
   if (isTaskRequest) {
     const title = message.replace(/^(add|create)(\s+a)?(\s+task)?(\s+to)?\s*/i, '').trim() || 'New JARVIS task';
     return { reply: `I prepared a local task from: ${title}`, questions: [], tasks: [{ title: title, detail: 'Prepared by token-free JARVIS mode', type: 'personal', priority: 'medium', dueAt: '' }], events: [], mode: 'local' };
   }
-  return { reply: 'Token-free mode is active. I can still save tasks, reviews, metrics, reminders, and Calendar data. Add GEMINI_API_KEY when you want screenshot understanding and deeper reasoning.', questions: [], tasks: [], events: [], mode: 'local' };
+  return { reply: 'Token-free mode is active. I can still save tasks, reviews, metrics, reminders, and Calendar data. Add GROQ_API_KEY when you want screenshot understanding and deeper reasoning.', questions: [], tasks: [], events: [], mode: 'local' };
 }
 
 function saveSocialReminder_(request) {

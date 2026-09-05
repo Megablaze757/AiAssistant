@@ -1,6 +1,7 @@
 import { askAssistant, createCalendarEvent, isConnected, pullPocketAthleteTraining, requestDashboard, saveCapture, saveMetric, savePocketAthleteConfig, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
 import { buildPlan } from './src/planner.js';
 import { buildBriefing } from './src/briefing.js';
+import { areaSplit, completionsByDay as completionsFor, domainStatus, daysUntil, momentumInsight, nextDeadline, streak } from './src/insights.js';
 import { CAPABILITIES, matchTask, parseCommand } from './src/commands.js';
 import { biometricFromMetric, canPushBiometrics, canReadTraining, pushBiometrics, readConfig as readPocketAthleteConfig, saveConfig as savePocketAthleteTokens } from './src/pocketathlete.js';
 
@@ -35,6 +36,8 @@ let pulseLog = JSON.parse(localStorage.getItem('jarvis-pulse-log') || '[]');
 let training = JSON.parse(localStorage.getItem('jarvis-training') || 'null') || { configured: false, sessions: [] };
 let calendarEvents = [];
 let latestEmails = [];
+// Which domain the queue is filtered to, or '' for all of them.
+let areaFilter = '';
 let plan = JSON.parse(localStorage.getItem('jarvis-plan') || 'null');
 // Which reminders have already been announced, so a notification fires once
 // rather than every time the scheduler ticks.
@@ -250,7 +253,20 @@ function notifyUpcoming() {
 
 function renderTasks() {
   const priorityRank = { high: 0, medium: 1, low: 2 };
-  const orderedTasks = tasks.slice().sort((a, b) => {
+  /**
+   * Open work, plus what you finished today.
+   *
+   * Completed tasks used to stay in the queue forever. Now that completions are
+   * kept for the momentum panel that is a queue which only ever grows, and the
+   * open work — the entire point of the panel — gets pushed off the bottom.
+   * Today's are kept so ticking something still feels like something, and so a
+   * mis-tick can be undone; older ones live in the history the panels below
+   * count, not in the list of what to do next.
+   */
+  const visible = tasks.filter((task) => (!areaFilter || task.type === areaFilter)
+    && (!task.done || !task.completedAt || localDate(new Date(task.completedAt)) === localDate()));
+  const hidden = tasks.filter((task) => (!areaFilter || task.type === areaFilter) && task.done).length - visible.filter((task) => task.done).length;
+  const orderedTasks = visible.sort((a, b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
     const priorityDifference = (priorityRank[a.priority || 'medium'] ?? 1) - (priorityRank[b.priority || 'medium'] ?? 1);
     if (priorityDifference) return priorityDifference;
@@ -264,8 +280,16 @@ function renderTasks() {
     // and an empty panel with no words in it reads as a broken one.
     const empty = document.createElement('p');
     empty.className = 'muted';
-    empty.textContent = 'Nothing queued. Add the one move that would make today count.';
+    empty.textContent = areaFilter
+      ? `Nothing open under ${AREA_LABELS[areaFilter] || areaFilter}.`
+      : 'Nothing queued. Add the one move that would make today count.';
     taskList.replaceChildren(empty);
+    if (hidden > 0) {
+      const note = document.createElement('p');
+      note.className = 'muted queue-hidden';
+      note.textContent = `${hidden} completed before today ${hidden === 1 ? 'is' : 'are'} kept in your history.`;
+      taskList.append(note);
+    }
     focusCount.textContent = '00';
     document.querySelector('#completed-count').textContent = '00';
     if (objective) renderObjective();
@@ -297,11 +321,32 @@ function renderTasks() {
     item.append(checkbox, label);
     return item;
   }));
+  if (hidden > 0) {
+    const note = document.createElement('p');
+    note.className = 'muted queue-hidden';
+    note.textContent = `${hidden} completed before today ${hidden === 1 ? 'is' : 'are'} kept in your history.`;
+    taskList.append(note);
+  }
   focusCount.textContent = String(tasks.filter((task) => !task.done).length).padStart(2, '0');
   document.querySelector('#completed-count').textContent = String(tasks.filter((task) => task.done).length).padStart(2, '0');
   if (objective) renderObjective();
   renderLifeGrid();
   renderMomentum();
+}
+
+/**
+ * Filter the queue to one domain.
+ *
+ * This is what the life cards do now. Pressing the card that just told you
+ * university work is slipping shows you that work, which is the next thing you
+ * wanted; pressing it again clears the filter.
+ */
+function setAreaFilter(area) {
+  areaFilter = areaFilter === area ? '' : area;
+  document.querySelectorAll('[data-area]').forEach((card) => card.setAttribute('aria-pressed', String(card.dataset.area === areaFilter)));
+  document.querySelector('#queue-eyebrow').textContent = areaFilter ? `COMMAND QUEUE • ${(AREA_LABELS[areaFilter] || areaFilter).toUpperCase()}` : 'COMMAND QUEUE';
+  document.querySelector('#clear-filter').hidden = !areaFilter;
+  renderTasks();
 }
 
 /** YYYY-MM-DD in the viewer's own timezone. Not toISOString(), which is UTC and
@@ -335,43 +380,97 @@ function completionsByDay(days) {
   return buckets;
 }
 
-function openTasksIn(...types) {
-  return tasks.filter((task) => !task.done && types.includes(task.type));
-}
+const STATUS_WORDS = { slipping: 'SLIPPING', stalled: 'STALLED', moving: 'MOVING', quiet: 'QUIET', clear: 'CLEAR' };
 
-function latestMetric(area) {
-  return metrics.filter((metric) => metric.area === area).slice(-1)[0] || null;
-}
-
-function setCard(prefix, value, note) {
+function setCard(prefix, { value, note, status }) {
   document.querySelector(`#life-${prefix}-value`).textContent = value;
   document.querySelector(`#life-${prefix}-note`).textContent = note;
+  const chip = document.querySelector(`#life-${prefix}-status`);
+  chip.textContent = STATUS_WORDS[status] || '';
+  chip.className = `life-status is-${status}`;
 }
 
 /**
- * The four life cards, from data that exists.
+ * The four life cards.
  *
- * Each of these was a hardcoded string — "03h 20m", "04 / 05", "72%", "On
- * track" — that never changed whatever you did. A card with nothing behind it
- * now says so rather than inventing a number.
+ * They used to show a count of open work, which is the one number that cannot
+ * tell you how an area is going: a long list can mean momentum or abandonment
+ * and it looks identical either way. Each card now leads with a judgement —
+ * slipping, stalled, moving, quiet, clear — computed in src/insights.js, and
+ * the big figure is whatever is actually decision-relevant for that domain.
+ *
+ * They are also filters now rather than tab links. Pressing one shows only that
+ * area's work in the queue, which is the thing you actually want after reading
+ * that an area is slipping.
  */
 function renderLifeGrid() {
-  const study = openTasksIn('study');
-  const nextStudy = study.filter((task) => task.dueAt).sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt))[0];
-  setCard('study', study.length ? String(study.length).padStart(2, '0') : '—',
-    nextStudy ? `Next due ${new Date(nextStudy.dueAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}` : study.length ? 'No deadlines set' : 'Nothing open');
+  const now = new Date();
+  const state = { tasks, now };
 
-  const build = openTasksIn('coding');
-  const shipped = tasks.filter((task) => task.type === 'coding' && task.done && withinDays(task.completedAt, 7)).length;
-  setCard('build', build.length ? String(build.length).padStart(2, '0') : '—',
-    shipped ? `${shipped} shipped this week` : build.length ? 'Nothing shipped yet this week' : 'Nothing open');
+  // University runs on deadlines, so the number is time remaining, not volume.
+  const study = domainStatus('study', state);
+  const deadline = nextDeadline('study', state);
+  const days = deadline ? daysUntil(deadline.dueAt, now) : null;
+  setCard('study', {
+    status: study.status,
+    value: days === null ? (study.open ? String(study.open).padStart(2, '0') : '—') : days < 0 ? 'LATE' : days === 0 ? 'TODAY' : `${days}d`,
+    note: deadline ? deadline.title : study.open ? `${study.open} open, no deadlines set` : 'Nothing open'
+  });
 
-  const business = openTasksIn('business');
-  const revenue = latestMetric('business');
-  setCard('business', business.length ? String(business.length).padStart(2, '0') : '—',
-    revenue ? `${revenue.name}: ${revenue.value}` : business.length ? 'No numbers logged' : 'Nothing open');
+  // Build runs on shipping rate: what left the queue, not what sits in it.
+  const build = domainStatus('coding', state);
+  setCard('build', {
+    status: build.status,
+    value: String(build.completedThisWeek).padStart(2, '0'),
+    note: build.completedThisWeek
+      ? `shipped this week • ${build.open} open`
+      : build.open ? `nothing shipped in 7 days • ${build.open} open` : 'Nothing open'
+  });
+
+  // Business runs on the number you logged, with its movement.
+  const business = domainStatus('business', state);
+  const figures = metrics.filter((metric) => metric.area === 'business');
+  const latest = figures[figures.length - 1];
+  const previous = figures[figures.length - 2];
+  const change = latest && previous ? Number(latest.value) - Number(previous.value) : null;
+  setCard('business', {
+    status: business.status,
+    value: latest ? String(latest.value) : business.open ? String(business.open).padStart(2, '0') : '—',
+    note: latest
+      ? `${latest.name}${change === null ? '' : change > 0 ? ` • up ${Math.abs(change)}` : change < 0 ? ` • down ${Math.abs(change)}` : ' • unchanged'}`
+      : business.open ? `${business.open} open, no numbers logged` : 'Nothing open'
+  });
 
   renderTrainingCard();
+}
+
+/**
+ * Training, from the feed when there is one.
+ *
+ * Its status comes from the programme rather than from the task list: a missed
+ * session is the thing that matters here, and it never appears as a task.
+ */
+function renderTrainingCard() {
+  const title = document.querySelector('#life-training-title');
+  const week = training.configured ? weekSessions() : [];
+  if (week.length) {
+    const done = week.filter((session) => session.done).length;
+    const missed = week.filter((session) => !session.done && session.date < localDate()).length;
+    title.textContent = 'This week';
+    setCard('training', {
+      status: missed ? 'slipping' : done === week.length ? 'clear' : done ? 'moving' : 'quiet',
+      value: `${String(done).padStart(2, '0')} / ${String(week.length).padStart(2, '0')}`,
+      note: missed ? `${missed} session${missed === 1 ? '' : 's'} missed` : nextSession() ? `Next: ${nextSession().title}` : 'Week complete'
+    });
+    return;
+  }
+  const own = domainStatus('training', { tasks, now: new Date() });
+  title.textContent = 'Training';
+  setCard('training', {
+    status: training.configured ? 'clear' : own.status,
+    value: own.open ? String(own.open).padStart(2, '0') : '—',
+    note: training.configured ? 'No sessions in your programme yet' : canReadTraining() ? 'Connect Google sync to read the feed' : 'Connect PocketAthlete'
+  });
 }
 
 function withinDays(timestamp, days) {
@@ -380,26 +479,6 @@ function withinDays(timestamp, days) {
   return !Number.isNaN(when.getTime()) && when >= new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
-/**
- * The training card, from the PocketAthlete feed when there is one.
- *
- * Falls back to JARVIS's own training tasks rather than to an invented "04 /
- * 05" — the honest answer to "no feed connected" is what you typed in yourself.
- */
-function renderTrainingCard() {
-  const title = document.querySelector('#life-training-title');
-  if (training.configured && training.sessions.length) {
-    const week = weekSessions();
-    title.textContent = 'This week';
-    setCard('training', `${String(week.filter((session) => session.done).length).padStart(2, '0')} / ${String(week.length).padStart(2, '0')}`,
-      nextSession() ? `Next: ${nextSession().title}` : 'Week complete');
-    return;
-  }
-  const open = openTasksIn('training');
-  title.textContent = 'Training';
-  setCard('training', open.length ? String(open.length).padStart(2, '0') : '—',
-    training.configured ? 'No sessions in your programme yet' : canReadTraining() ? 'Connect Google sync to read the feed' : 'Connect PocketAthlete');
-}
 
 /** Monday-to-Sunday around today, matching how the programme is planned. */
 function weekSessions() {
@@ -418,25 +497,38 @@ function nextSession() {
   return training.sessions.find((session) => !session.done && session.date >= today) || null;
 }
 
+const AREA_LABELS = { study: 'University', training: 'Training', coding: 'Build', business: 'Business', personal: 'Personal', other: 'Other' };
+
 /**
- * Momentum, from completions rather than from CSS.
+ * Momentum.
  *
- * The old panel drew twelve bars whose heights were nth-child rules in the
- * stylesheet, under a 7.4/10 and a +12% that were typed into the markup. All
- * three now come from completedAt stamps, and read zero when nothing was done.
+ * It counted completions this week. That is a real number and a useless one:
+ * it goes up when you are busy and says nothing about whether the system
+ * producing it is working, or which parts of your life are quietly getting
+ * none of you.
+ *
+ * So it now leads with the STREAK — consecutive days with something finished,
+ * the one figure here that changes behaviour — and shows WHERE THE EFFORT WENT
+ * over a fortnight as a proportional bar. An area receiving nothing shows up as
+ * an absent band, which is the thing a list of tasks structurally cannot tell
+ * you. The line underneath is one observation, and only when the data actually
+ * supports one.
  */
 function renderMomentum() {
-  const days = completionsByDay(14);
+  const now = new Date();
+  const run = streak(tasks, now);
+  const days = completionsFor(tasks, 14, now);
   const thisWeek = days.slice(7).reduce((total, day) => total + day.count, 0);
   const lastWeek = days.slice(0, 7).reduce((total, day) => total + day.count, 0);
-  document.querySelector('#momentum-value').textContent = String(thisWeek);
-  document.querySelector('#momentum-unit').textContent = thisWeek === 1 ? ' move this week' : ' moves this week';
+
+  document.querySelector('#momentum-value').textContent = String(run);
+  document.querySelector('#momentum-unit').textContent = ' day streak';
 
   const trend = document.querySelector('#momentum-trend');
   const change = thisWeek - lastWeek;
   trend.classList.remove('is-down', 'is-flat');
-  if (!thisWeek && !lastWeek) { trend.textContent = ''; }
-  else if (change > 0) { trend.textContent = `+${change} vs last week`; }
+  if (!thisWeek && !lastWeek) trend.textContent = '';
+  else if (change > 0) trend.textContent = `+${change} vs last week`;
   else if (change < 0) { trend.textContent = `${change} vs last week`; trend.classList.add('is-down'); }
   else { trend.textContent = 'Level with last week'; trend.classList.add('is-flat'); }
 
@@ -445,14 +537,39 @@ function renderMomentum() {
     const bar = document.createElement('i');
     bar.style.height = `${Math.round((day.count / peak) * 100)}%`;
     if (!day.count) bar.classList.add('is-empty');
-    bar.title = `${new Date(`${day.date}T00:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' })}: ${day.count}`;
+    bar.title = `${new Date(`${day.date}T00:00:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}: ${day.count}`;
     return bar;
   }));
+  document.querySelector('#momentum-week').textContent = thisWeek || lastWeek ? `${thisWeek + lastWeek} in 14 days` : '';
 
+  const split = areaSplit(tasks, 14, now);
+  const balance = document.querySelector('#momentum-balance');
+  const total = split.reduce((sum, entry) => sum + entry.count, 0);
+  balance.replaceChildren(...split.map((entry) => {
+    const band = document.createElement('i');
+    band.className = `area-${AREA_LABELS[entry.area] ? entry.area : 'other'}`;
+    band.style.flex = String(entry.count);
+    band.title = `${AREA_LABELS[entry.area] || entry.area}: ${entry.count} of ${total}`;
+    return band;
+  }));
+
+  const key = document.querySelector('#momentum-key') || Object.assign(document.createElement('p'), { className: 'balance-key', id: 'momentum-key' });
+  key.replaceChildren(...split.map((entry) => {
+    const item = document.createElement('span');
+    const swatch = document.createElement('b');
+    swatch.className = `area-${AREA_LABELS[entry.area] ? entry.area : 'other'}`;
+    const label = document.createElement('span');
+    label.textContent = `${AREA_LABELS[entry.area] || entry.area} ${entry.count}`;
+    item.append(swatch, label);
+    return item;
+  }));
+  if (!key.isConnected) balance.after(key);
+  key.hidden = !split.length;
+
+  const insight = momentumInsight({ tasks, focusLog, now });
   const fortnight = thisWeek + lastWeek;
-  document.querySelector('#momentum-note').textContent = fortnight
-    ? `${fortnight} move${fortnight === 1 ? '' : 's'} completed in the last fortnight.`
-    : 'Complete a move and this starts tracking.';
+  document.querySelector('#momentum-note').textContent = insight
+    || (fortnight ? `${fortnight} move${fortnight === 1 ? '' : 's'} completed in the last fortnight.` : 'Complete a move and this starts tracking.');
 }
 
 /**
@@ -1307,6 +1424,9 @@ document.querySelector('#readiness-form').addEventListener('submit', async (even
     showToast(error.message);
   }
 });
+
+document.querySelectorAll('[data-area]').forEach((card) => card.addEventListener('click', () => setAreaFilter(card.dataset.area)));
+document.querySelector('#clear-filter').addEventListener('click', () => setAreaFilter(''));
 
 renderTasks();
 renderPlan();

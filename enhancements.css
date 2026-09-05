@@ -124,3 +124,32 @@
 /* Offline answers can be lists — what is due, what is open — so the newlines
    in them have to survive. */
 .assistant-message p { white-space: pre-line; }
+
+/* Domain status. The chip is the first thing read on a card, so it sits on the
+   same line as the label and carries the colour rather than the number. */
+.life-status { justify-self: end; align-self: center; padding: 3px 6px; font: 500 9px 'DM Mono', monospace; letter-spacing: .04em; }
+.life-status.is-slipping { color: #ffb4a2; background: #4a2f2f; }
+.life-status.is-stalled { color: var(--orange); background: #4a3b37; }
+.life-status.is-moving { color: var(--green); background: #30483e; }
+.life-status.is-quiet { color: var(--muted); background: #2a3647; }
+.life-status.is-clear { color: var(--muted); background: transparent; }
+.life-card[aria-pressed="true"] { border-color: var(--cyan); background: #1d3449; }
+.life-card[aria-pressed="true"] .life-icon { outline: 1px solid var(--cyan); }
+.life-card .eyebrow { grid-column: 2; }
+.queue-actions { display: flex; align-items: center; gap: 14px; }
+
+/* Where the effort went. Bars are proportional widths in one row, so neglect
+   reads as an absent band rather than a number you have to compare. */
+.sparkline-axis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font: 9px 'DM Mono', monospace; }
+.balance { display: flex; gap: 2px; height: 8px; margin-top: 16px; overflow: hidden; }
+.balance i { display: block; }
+.area-study { background: var(--cyan); }
+.area-training { background: var(--orange); }
+.area-coding { background: var(--green); }
+.area-business { background: #d4b6ff; }
+.area-personal { background: #7fa6c9; }
+.area-other { background: #56708a; }
+.balance-key { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; color: var(--muted); font: 9px 'DM Mono', monospace; }
+.balance-key span { display: flex; align-items: center; gap: 5px; }
+.balance-key b { width: 7px; height: 7px; }
+.queue-hidden { margin-top: 12px; font-size: 11px; }

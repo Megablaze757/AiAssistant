@@ -39,10 +39,10 @@
         </section>
 
         <section class="life-grid" aria-label="Life domains">
-          <button class="life-card study" data-view-target="agenda"><span class="life-icon">⌁</span><span class="eyebrow">UNIVERSITY</span><strong id="life-study-title">Study</strong><b id="life-study-value">—</b><small id="life-study-note">Nothing open</small></button>
-          <button class="life-card training" data-view-target="workbench"><span class="life-icon">+</span><span class="eyebrow">TRAINING</span><strong id="life-training-title">Training</strong><b id="life-training-value">—</b><small id="life-training-note">Connect PocketAthlete</small></button>
-          <button class="life-card build" data-view-target="workbench"><span class="life-icon">⌘</span><span class="eyebrow">BUILD</span><strong id="life-build-title">Build</strong><b id="life-build-value">—</b><small id="life-build-note">Nothing open</small></button>
-          <button class="life-card business" data-view-target="performance"><span class="life-icon">↗</span><span class="eyebrow">BUSINESS</span><strong id="life-business-title">Business</strong><b id="life-business-value">—</b><small id="life-business-note">Nothing open</small></button>
+          <button class="life-card study" data-area="study" aria-pressed="false"><span class="life-icon">⌁</span><span class="eyebrow">UNIVERSITY</span><span class="life-status" id="life-study-status"></span><strong id="life-study-title">University</strong><b id="life-study-value">—</b><small id="life-study-note">Nothing open</small></button>
+          <button class="life-card training" data-area="training" aria-pressed="false"><span class="life-icon">+</span><span class="eyebrow">TRAINING</span><span class="life-status" id="life-training-status"></span><strong id="life-training-title">Training</strong><b id="life-training-value">—</b><small id="life-training-note">Nothing open</small></button>
+          <button class="life-card build" data-area="coding" aria-pressed="false"><span class="life-icon">⌘</span><span class="eyebrow">BUILD</span><span class="life-status" id="life-build-status"></span><strong id="life-build-title">Build</strong><b id="life-build-value">—</b><small id="life-build-note">Nothing open</small></button>
+          <button class="life-card business" data-area="business" aria-pressed="false"><span class="life-icon">↗</span><span class="eyebrow">BUSINESS</span><span class="life-status" id="life-business-status"></span><strong id="life-business-title">Business</strong><b id="life-business-value">—</b><small id="life-business-note">Nothing open</small></button>
         </section>
 
         <section class="panel plan-panel" id="plan-panel" data-section="overview agenda" hidden>
@@ -54,7 +54,7 @@
 
         <section class="content-grid" id="app-view">
           <article class="panel priorities-panel" data-section="overview workbench">
-            <div class="panel-heading"><div><p class="eyebrow">COMMAND QUEUE</p><h2>Priority moves</h2></div><button class="text-button" id="add-task">+ Add</button></div>
+            <div class="panel-heading"><div><p class="eyebrow" id="queue-eyebrow">COMMAND QUEUE</p><h2>Priority moves</h2></div><div class="queue-actions"><button class="text-button" id="clear-filter" hidden>Show all</button><button class="text-button" id="add-task">+ Add</button></div></div>
             <div class="task-list" id="task-list"></div>
           </article>
 
@@ -111,8 +111,10 @@
 
           <article class="panel momentum-panel" data-section="overview performance">
             <div class="panel-heading"><div><p class="eyebrow">MOMENTUM</p><h2>Small wins compound</h2></div><span class="trend" id="momentum-trend"></span></div>
-            <div class="momentum-value"><span id="momentum-value">0</span><span id="momentum-unit"> moves this week</span></div>
+            <div class="momentum-value"><span id="momentum-value">0</span><span id="momentum-unit"> day streak</span></div>
             <div class="sparkline" id="momentum-sparkline" aria-label="Moves completed over the last 14 days"></div>
+            <p class="sparkline-axis"><span>14 days ago</span><span id="momentum-week"></span><span>today</span></p>
+            <div class="balance" id="momentum-balance" aria-label="Where completed work went over the last 14 days"></div>
             <p class="muted" id="momentum-note">Complete a move and this starts tracking.</p>
           </article>
 

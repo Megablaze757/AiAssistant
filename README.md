@@ -190,6 +190,68 @@ a server holding a subscription, which a static GitHub Pages site cannot be, so
 anything that came due while you were away is reported on your next visit
 instead of being silently lost.
 
+### The life cards
+
+They showed a count of open tasks, which is the one number that cannot tell you
+how an area of your life is going — a long list means momentum or abandonment
+and looks identical either way.
+
+Each card now leads with a judgement computed in `src/insights.js`:
+
+| Status | Meaning |
+| --- | --- |
+| `SLIPPING` | Something in this area is past its deadline. |
+| `STALLED` | Open work here, and nothing finished in it for a fortnight. |
+| `MOVING` | Something was finished here in the last seven days. |
+| `QUIET` | Open work, nothing recent, but not yet stale. |
+| `CLEAR` | Nothing open. |
+
+The order is the judgement: overdue work makes an area slipping whatever else is
+true of it, and an area with open work and no finish for a fortnight is stalled
+even when it looks busy.
+
+The headline figure is whatever is decision-relevant for that domain rather than
+the same count four times — **University** shows time to the nearest deadline
+(`3d`, `TODAY`, `LATE`), **Training** shows sessions done against planned for
+this week from the PocketAthlete feed and flags a missed one, **Build** shows
+what actually shipped in seven days, and **Business** shows your latest logged
+figure with its movement.
+
+**They are filters, not tab links.** Pressing the card that just told you
+university work is slipping shows you that work. Pressing it again clears it.
+The counters elsewhere keep describing the whole queue, so a filter can never
+misreport the size of your day.
+
+### Momentum
+
+It counted completions this week — real, and useless: it rises when you are busy
+and says nothing about whether the system producing it works, or which parts of
+your life are quietly getting none of you.
+
+It now leads with the **streak** — consecutive days with something finished,
+the one figure here that changes behaviour. Yesterday still counts as unbroken,
+because at nine in the morning you have not failed today yet; ending it at
+midnight would show a zero every morning and make the number worth ignoring.
+
+Under the sparkline is **where the effort actually went** over a fortnight, as a
+proportional bar by area. A neglected area shows up as an absent band, which is
+the thing a task list structurally cannot tell you.
+
+The line underneath is one observation, and only when the data supports one:
+neglect first (*"Nothing finished under business for 21 days, with 1 move still
+open"*), then a streak of three or more, then a weekday pattern, then whether
+focus sessions correlate with output. Every branch has a threshold and returning
+nothing is a valid answer — an insight drawn from three data points is a
+horoscope.
+
+### The queue
+
+Completed tasks used to stay in it forever. Once completions started being kept
+for the momentum panel that became a list which only grows, pushing the open
+work off the bottom. The queue now shows open work plus what you finished today
+— enough that ticking something still registers and a mis-tick can be undone —
+and says how many older ones are kept in your history.
+
 ### The briefing and the hero line
 
 The briefing was a three-branch template — empty queue, else the first task

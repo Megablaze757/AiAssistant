@@ -1,6 +1,6 @@
 # JARVIS Personal Command Center
 
-A dependency-free first slice of a personal assistant designed for GitHub Pages and iPhone Safari. It currently runs in local demo mode and stores the command queue in browser `localStorage`.
+A dependency-free personal assistant designed for GitHub Pages and iPhone Safari. It runs locally out of the box, storing your data in browser `localStorage`, and connects to Google (Calendar, Gmail, Sheets) and PocketAthlete when you give it the details. It ships with no demo data — every figure on screen is something you logged.
 
 ## Launch without an AI token
 
@@ -48,13 +48,13 @@ The paste-ready backend is in `appscript/Code.gs`. Follow its setup comments to 
 
 Important: a public GitHub Pages site cannot keep a secret API key. For a truly private deployment, use Google login/OAuth or host the frontend behind an authenticated platform. The Apps Script web-app setting `Anyone with the link` is convenient for testing but should not be treated as strong privacy protection.
 
-The local demo path should remain available so the app is usable during development and when the backend is unavailable.
+The local path should remain available so the app is usable during development and when the backend is unavailable.
 
 ## Frontend integration boundary
 
-`src/api.js` is the only frontend module that should know the Apps Script URL. Add the deployed `/exec` URL to `API_URL` when the backend is ready. Keep it blank for local demo mode. The UI is intentionally usable without the network, and the adapter uses a `text/plain` POST body to avoid Apps Script browser preflight issues.
+`src/api.js` is the only frontend module that should know the Apps Script URL. Add the deployed `/exec` URL to `API_URL` when the backend is ready. Keep it blank for local mode. The UI is intentionally usable without the network, and the adapter uses a `text/plain` POST body to avoid Apps Script browser preflight issues.
 
-You can also connect without editing code: open the app, select the sync status at the bottom of the sidebar, paste the Apps Script `/exec` URL, and choose **Connect**. The URL is stored only in that browser's local storage. Clear the field to return to local demo mode.
+You can also connect without editing code: open the app, select the sync status at the bottom of the sidebar, paste the Apps Script `/exec` URL, and choose **Connect**. The URL is stored only in that browser's local storage. Clear the field to return to local mode.
 
 ## AI inbox setup with Groq
 
@@ -74,17 +74,87 @@ When Google sync is connected, Apps Script reads only a narrow Gmail query: unre
 
 ## PocketAthlete sync
 
-PocketAthlete is the source of truth for training readiness, load, soreness, sleep, workouts, and form analysis. JARVIS should consume a normalized summary and use it to plan study, coding, and business work around training and recovery. PocketAthlete's public site does not advertise a public API or export contract, so the integration currently exposes `syncPocketAthleteWorkout` as a backend boundary rather than scraping private pages. Use an official API/export from PocketAthlete when available, or import a user-owned CSV/JSON export through a future settings tool.
+PocketAthlete (`pocketathlete.com`, built from the `FOOTBALLFITNESSGURU`
+repository) is the source of truth for training and readiness, and JARVIS is now
+wired to it in both directions. It does not scrape anything: PocketAthlete
+already publishes two token-addressed endpoints on its Cloudflare Worker, and
+the integration uses those.
 
-Recommended normalized payload:
+| Direction | Endpoint | Carries |
+| --- | --- | --- |
+| PocketAthlete → JARVIS | `GET /calendar?token=<uuid>` | The training programme as an ICS subscription: session titles, dates, exercise counts, and which sessions are done. |
+| JARVIS → PocketAthlete | `POST /wearable-ingest` | Sleep hours, HRV, and resting heart rate, which feed PocketAthlete's readiness score. |
 
-```json
-{
-	"sourceId": "pocketathlete-workout-id",
-	"name": "Upper body strength",
-	"durationMinutes": 62,
-	"intensity": "moderate",
-	"notes": "Readiness 82; sleep 7.8h; no pain",
-	"createdAt": "2026-09-04T17:00:00.000Z"
-}
-```
+### The two directions do not travel the same way
+
+This is a property of the Worker rather than a design choice here, and it
+explains the one piece of setup that is otherwise surprising.
+
+`/wearable-ingest` answers through the Worker's `json()` helper, which sends
+`Access-Control-Allow-Origin: *` and allows `POST` and the `authorization`
+header. The browser can therefore call it directly, so **pushing readiness works
+in local mode with nothing else connected.**
+
+`/calendar` answers with a bare `text/calendar` response and no CORS headers at
+all, because it is built for calendar clients, which are not browsers and do not
+enforce the same-origin policy. A `fetch()` from the page is refused before it
+can read a byte, however the request is shaped. So **reading your training
+programme needs Google sync connected too** — Apps Script fetches the feed
+server-side with `UrlFetchApp`, parses it, and returns normalised sessions in the
+dashboard payload.
+
+### Setting it up
+
+1. In PocketAthlete, get your calendar subscription link (Admin → the calendar
+   token) and your Apple Health upload link (the one the Shortcut uses).
+2. In JARVIS, open the **PocketAthlete** panel → **Settings**.
+3. Paste either the whole link or just the token — the field accepts both, and
+   pulls `?token=` out of the calendar link and `?t=` out of the health link.
+4. Connect Google sync if you want the training feed as well as the push.
+
+Both values are per-athlete feed credentials that PocketAthlete is designed to
+have pasted into clients; an Apple Shortcut holds the same ingest token. They are
+stored in this browser, and the calendar token is additionally copied into Apps
+Script properties so the backend can read the feed. Re-minting either token
+inside PocketAthlete revokes the old value immediately.
+
+### What it does with them
+
+- Today's session appears in **Today's agenda** as an all-day entry. The feed
+  carries no clock times — the programme is ordered rather than scheduled — so
+  none are invented.
+- The **Training** life card shows completed-versus-planned sessions for the
+  current week and names the next one.
+- Completed sessions are mirrored into the `Workouts` sheet, deduplicated on the
+  feed's own stable UID. Planned sessions are not: writing a plan as a workout
+  would report training that has not happened.
+- Logging a sleep, HRV, or resting-heart-rate metric in JARVIS pushes it to
+  PocketAthlete automatically. Study hours and revenue are not sent — they have
+  no home there. PocketAthlete keeps a value you typed in by hand over one
+  pushed from here, and reports when it has done so.
+
+One limitation worth knowing: the feed joins exercise names with a comma and
+then escapes the whole description, so a joining comma and a comma inside a name
+("Row, single-arm") are indistinguishable by the time they arrive. The exercise
+*count* is exact; the names are shown as the sentence the feed sent rather than
+split into a list that would sometimes be wrong.
+
+## No demo data
+
+The app previously shipped with seeded content: three example tasks, a name, a
+three-item agenda, and fixed figures across the life cards, momentum panel, and
+performance strip. All of it is gone. Every number on screen is now derived from
+what you have actually logged, or reads `—` with a note saying what is missing.
+
+Two things had to become real for that to work:
+
+- **Completions are timestamped locally**, not only in the sheet. The momentum
+  panel counts moves completed per day over a fortnight and compares this week
+  with last; its bars are sized from that log rather than from CSS.
+- **Focus sessions and daily pulses are kept as a log.** "Focus time logged"
+  counts only sessions that ran to zero, and "energy this week" averages the
+  pulses you actually recorded.
+
+Exports are now version 2 and carry the focus log, pulse log, and PocketAthlete
+connection alongside everything version 1 held; version 1 files still restore.
+**A backup file contains your connection tokens, so treat it as private.**

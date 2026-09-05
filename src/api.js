@@ -47,6 +47,22 @@ export async function syncPocketAthleteWorkout(workout) {
   return sendCommand({ action: 'syncPocketAthleteWorkout', ...workout });
 }
 
+/**
+ * Store the PocketAthlete feed address in Apps Script properties.
+ *
+ * The backend needs its own copy because it is the side that can actually read
+ * the feed: /calendar sends no CORS headers, so the browser is refused and
+ * UrlFetchApp is not. Sent once when the integration is configured rather than
+ * on every dashboard request.
+ */
+export async function savePocketAthleteConfig(config) {
+  return sendCommand({ action: 'savePocketAthleteConfig', base: config.base, calendarToken: config.calendarToken });
+}
+
+export async function pullPocketAthleteTraining() {
+  return sendCommand({ action: 'pullPocketAthleteTraining' });
+}
+
 export async function askAssistant(message, image, context) {
   return sendCommand({ action: 'assistant', message, image, context });
 }

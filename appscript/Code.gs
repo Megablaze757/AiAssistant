@@ -60,6 +60,8 @@ function doPost(event) {
     if (action === 'savePulse') return json_({ ok: true, pulse: savePulse_(request) });
     if (action === 'logWorkout') return json_({ ok: true, workout: logWorkout_(request) });
     if (action === 'syncPocketAthleteWorkout') return json_({ ok: true, workout: syncPocketAthleteWorkout_(request) });
+    if (action === 'savePocketAthleteConfig') return json_({ ok: true, config: savePocketAthleteConfig_(request) });
+    if (action === 'pullPocketAthleteTraining') return json_({ ok: true, training: pullPocketAthleteTraining_() });
     if (action === 'saveMetric') return json_({ ok: true, metric: saveMetric_(request) });
     if (action === 'assistant') return json_({ ok: true, ...askAssistant_(request) });
     if (action === 'saveSocialReminder') return json_({ ok: true, reminder: saveSocialReminder_(request) });
@@ -91,7 +93,7 @@ function getDashboard_() {
     end: item.getEndTime().toISOString(),
     location: item.getLocation()
   }));
-  return { ok: true, tasks: tasks, calendar: calendar, importantEmails: getImportantEmails_(), socialReminders: readRows_(SHEETS.social), lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics) };
+  return { ok: true, tasks: tasks, calendar: calendar, importantEmails: getImportantEmails_(), socialReminders: readRows_(SHEETS.social), lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics), training: pullPocketAthleteTraining_() };
 }
 
 function addTask_(request) {
@@ -279,5 +281,162 @@ function getImportantEmails_() {
   return GmailApp.search('is:unread newer_than:3d (is:important OR has:starred) -category:promotions -category:social', 0, 10).map((thread) => {
     const message = thread.getMessages().pop();
     return { id: thread.getId(), from: message.getFrom(), subject: message.getSubject(), receivedAt: message.getDate().toISOString(), snippet: message.getPlainBody().slice(0, 220) };
+  });
+}
+/**
+ * ───────────────────────────────────────────────────────────────────────────
+ * POCKETATHLETE
+ *
+ * PocketAthlete publishes the training programme as an ICS subscription at
+ * GET /calendar?token=<uuid>, and that response carries no CORS headers — it
+ * is built for calendar clients, which are not browsers. The frontend is
+ * therefore refused before it can read a byte, and this is the side that can
+ * do it: UrlFetchApp is a server and the same-origin policy does not apply.
+ *
+ * So the split is: the browser PUSHES biometrics straight to the Worker (that
+ * endpoint does send CORS headers), and the backend PULLS training from here.
+ *
+ * The token is a read-only feed credential scoped to one athlete's programme,
+ * revocable by re-minting it in PocketAthlete. It lives in script properties
+ * rather than in the sheet so it is not one accidental share away from being
+ * public.
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+
+function savePocketAthleteConfig_(request) {
+  const properties = PropertiesService.getScriptProperties();
+  const calendarToken = String(request.calendarToken || '').trim();
+  const base = String(request.base || '').trim().replace(/\/$/, '');
+  if (calendarToken && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(calendarToken)) {
+    throw new Error('That does not look like a PocketAthlete calendar token.');
+  }
+  if (base && base.indexOf('https://') !== 0) throw new Error('The PocketAthlete API address must start with https://.');
+  if (calendarToken) properties.setProperty('POCKETATHLETE_CALENDAR_TOKEN', calendarToken);
+  else properties.deleteProperty('POCKETATHLETE_CALENDAR_TOKEN');
+  if (base) properties.setProperty('POCKETATHLETE_BASE', base);
+  return { configured: Boolean(calendarToken), base: base };
+}
+
+/**
+ * Read the training feed and normalise it.
+ *
+ * NEVER THROWS. This runs inside the dashboard response, and a training feed
+ * that is down, unconfigured or slow must not take tasks, calendar and mail
+ * down with it — the panel says it could not read, and everything else works.
+ */
+function pullPocketAthleteTraining_() {
+  var properties = PropertiesService.getScriptProperties();
+  var token = properties.getProperty('POCKETATHLETE_CALENDAR_TOKEN');
+  var base = properties.getProperty('POCKETATHLETE_BASE') || 'https://apex-api.fitnessguru.workers.dev';
+  if (!token) return { configured: false, sessions: [] };
+  try {
+    var response = UrlFetchApp.fetch(base + '/calendar?token=' + encodeURIComponent(token), { muteHttpExceptions: true, followRedirects: true });
+    var code = response.getResponseCode();
+    // A token matching no athlete is a 404 by design, so it can be reported as
+    // the specific thing it is instead of an empty programme.
+    if (code === 404) return { configured: true, sessions: [], error: 'PocketAthlete did not recognise that calendar token. Re-mint it in the app.' };
+    if (code >= 300) return { configured: true, sessions: [], error: 'PocketAthlete returned ' + code + '.' };
+    var sessions = parseIcsSessions_(response.getContentText());
+    recordTrainingSessions_(sessions);
+    return { configured: true, sessions: sessions, syncedAt: new Date().toISOString() };
+  } catch (error) {
+    return { configured: true, sessions: [], error: 'Could not reach PocketAthlete: ' + error.message };
+  }
+}
+
+/**
+ * A minimal RFC 5545 reader for the one feed this app consumes.
+ *
+ * UNFOLDING COMES FIRST and is not optional. buildIcs folds at 75 octets with
+ * continuation lines that begin with a space, so a session title long enough to
+ * wrap arrives split across lines — parse before unfolding and it silently
+ * becomes a truncated title plus a line that matches no property.
+ */
+function parseIcsSessions_(text) {
+  var unfolded = String(text || '').replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '');
+  var sessions = [];
+  var current = null;
+  unfolded.split('\n').forEach(function (line) {
+    if (line === 'BEGIN:VEVENT') { current = {}; return; }
+    if (line === 'END:VEVENT') { if (current && current.date) sessions.push(finishSession_(current)); current = null; return; }
+    if (!current) return;
+    var separator = line.search(/[;:]/);
+    if (separator < 0) return;
+    var name = line.slice(0, separator).toUpperCase();
+    var value = line.slice(line.indexOf(':') + 1);
+    if (name === 'UID') current.uid = value;
+    if (name === 'SUMMARY') current.summary = unescapeIcsText_(value);
+    if (name === 'DESCRIPTION') current.description = unescapeIcsText_(value);
+    if (name === 'URL') current.url = unescapeIcsText_(value);
+    // DTSTART;VALUE=DATE:20260907 — all-day, because PocketAthlete plans a
+    // programme in order rather than at clock times.
+    if (name === 'DTSTART') current.date = value.slice(0, 8);
+  });
+  return sessions.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+}
+
+function finishSession_(event) {
+  var summary = event.summary || 'Training session';
+  // A leading tick is how the feed marks a completed session; it is a display
+  // convention, so it becomes a boolean here rather than staying in the title.
+  var done = summary.indexOf('✓') === 0;
+  /**
+   * The COUNT is taken from the feed and the names are NOT split into a list.
+   *
+   * PocketAthlete joins drill names with ", " and then escapes the whole
+   * description, so a joining comma and a comma inside a name ("Row, single-arm")
+   * both arrive as "\,". They are genuinely indistinguishable, and splitting on
+   * the comma turns one drill into two — an exercise list that is quietly wrong
+   * is worse than one shown as the sentence the feed actually sent. The leading
+   * number comes straight from drills.length, so it stays exact either way.
+   */
+  var exercises = (event.description || '').match(/^(\d+) exercises: (.*)$/m);
+  return {
+    id: event.uid || summary + event.date,
+    title: done ? summary.replace(/^✓\s*/, '') : summary,
+    date: event.date.slice(0, 4) + '-' + event.date.slice(4, 6) + '-' + event.date.slice(6, 8),
+    done: done,
+    exerciseCount: exercises ? Number(exercises[1]) : 0,
+    exerciseSummary: exercises ? exercises[2] : '',
+    url: event.url || 'https://pocketathlete.com/train'
+  };
+}
+
+/**
+ * Undo the escaping buildIcs applies.
+ *
+ * Two things here are easy to get wrong and silent when you do. The BACKSLASH
+ * COMES LAST, or an escaped backslash unescapes into "\n" and then that is read
+ * as a newline. And the semicolon pattern is /\\;/ — the natural-looking /\;/
+ * is just a semicolon in a JavaScript regex, so it would replace ";" with ";"
+ * and leave every real "\;" in the text. PocketAthlete's own escapeText carries
+ * a comment about making exactly that mistake in the other direction.
+ */
+function unescapeIcsText_(value) {
+  return String(value).replace(/\\n/g, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
+}
+
+/**
+ * Mirror completed sessions into the Workouts sheet.
+ *
+ * COMPLETED ONLY, and deduplicated on the feed's own stable UID. A planned
+ * session is a plan; writing it as a workout would report training that has not
+ * happened, and every metric downstream of that sheet would inherit the lie.
+ */
+function recordTrainingSessions_(sessions) {
+  var done = sessions.filter(function (session) { return session.done; });
+  if (!done.length) return;
+  var existing = {};
+  readRows_(SHEETS.workouts).forEach(function (row) { existing[String(row.id)] = true; });
+  done.forEach(function (session) {
+    if (existing[String(session.id)]) return;
+    appendRow_(SHEETS.workouts, {
+      id: session.id,
+      name: session.title,
+      durationMinutes: '',
+      intensity: '',
+      notes: 'PocketAthlete session' + (session.exerciseCount ? ' - ' + session.exerciseCount + ' exercises' : ''),
+      createdAt: session.date
+    });
   });
 }

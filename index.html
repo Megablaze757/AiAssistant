@@ -21,28 +21,28 @@
           <button class="nav-item" data-view="workbench"><span>⌘</span> Workbench</button>
           <button class="nav-item" data-view="performance"><span>↗</span> Performance</button>
         </nav>
-        <button class="sidebar-foot sync-control" id="sync-control" type="button"><span class="status-dot"></span><span id="sync-label">Local demo mode</span><span class="sync-arrow">↗</span></button>
+        <button class="sidebar-foot sync-control" id="sync-control" type="button"><span class="status-dot"></span><span id="sync-label">Local mode</span><span class="sync-arrow">↗</span></button>
       </aside>
 
       <main class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow" id="current-date">THURSDAY, SEPTEMBER 4, 2026</p>
-            <h1 id="page-title">Good morning, Sasha.</h1>
+            <p class="eyebrow" id="current-date"></p>
+            <h1 id="page-title"></h1>
           </div>
           <div class="top-actions"><button class="icon-button" id="profile-button" aria-label="Open profile settings" title="Profile settings">◎</button><button class="icon-button" id="notify-button" aria-label="Enable reminders" title="Enable reminders">♢</button><button class="icon-button" id="focus-button" aria-label="Start a 25 minute focus session" title="Start a 25 minute focus session">◉</button></div>
         </header>
 
         <section class="hero-strip" aria-label="Daily focus">
-          <div><p class="eyebrow">TODAY'S OPERATING MODE</p><h2 id="hero-message">Make the important thing easy to start.</h2><p class="hero-note">JARVIS is balancing study, training, code, and the business around your available energy.</p></div>
-          <div class="hero-stat"><strong id="focus-count">03</strong><span>priority moves</span><button class="hero-action" id="plan-day">Plan my day</button></div>
+          <div><p class="eyebrow">TODAY'S OPERATING MODE</p><h2 id="hero-message">Make the important thing easy to start.</h2><p class="hero-note" id="hero-note">Add your first move, or connect a source, and this becomes your real day.</p></div>
+          <div class="hero-stat"><strong id="focus-count">00</strong><span>priority moves</span><button class="hero-action" id="plan-day">Plan my day</button></div>
         </section>
 
         <section class="life-grid" aria-label="Life domains">
-          <button class="life-card study" data-view-target="agenda"><span class="life-icon">⌁</span><span class="eyebrow">UNIVERSITY</span><strong>Study runway</strong><b>03h 20m</b><small>2 focused blocks planned</small></button>
-          <button class="life-card training" data-view-target="workbench"><span class="life-icon">+</span><span class="eyebrow">TRAINING</span><strong>Push session</strong><b>04 / 05</b><small>Weekly consistency</small></button>
-          <button class="life-card build" data-view-target="workbench"><span class="life-icon">⌘</span><span class="eyebrow">BUILD</span><strong>Code momentum</strong><b>72%</b><small>One release moving forward</small></button>
-          <button class="life-card business" data-view-target="performance"><span class="life-icon">↗</span><span class="eyebrow">BUSINESS</span><strong>Weekly signal</strong><b>On track</b><small>Review metrics this afternoon</small></button>
+          <button class="life-card study" data-view-target="agenda"><span class="life-icon">⌁</span><span class="eyebrow">UNIVERSITY</span><strong id="life-study-title">Study</strong><b id="life-study-value">—</b><small id="life-study-note">Nothing open</small></button>
+          <button class="life-card training" data-view-target="workbench"><span class="life-icon">+</span><span class="eyebrow">TRAINING</span><strong id="life-training-title">Training</strong><b id="life-training-value">—</b><small id="life-training-note">Connect PocketAthlete</small></button>
+          <button class="life-card build" data-view-target="workbench"><span class="life-icon">⌘</span><span class="eyebrow">BUILD</span><strong id="life-build-title">Build</strong><b id="life-build-value">—</b><small id="life-build-note">Nothing open</small></button>
+          <button class="life-card business" data-view-target="performance"><span class="life-icon">↗</span><span class="eyebrow">BUSINESS</span><strong id="life-business-title">Business</strong><b id="life-business-value">—</b><small id="life-business-note">Nothing open</small></button>
         </section>
 
         <section class="content-grid" id="app-view">
@@ -53,7 +53,7 @@
 
           <article class="panel briefing-panel" data-section="overview workbench">
             <div class="panel-heading"><div><p class="eyebrow">JARVIS BRIEFING</p><h2>What deserves your attention</h2></div><span class="ai-badge">LOCAL AI</span></div>
-            <div class="briefing-copy" id="briefing-copy">Review your three priority moves, then protect the first deep-work block before opening new work.</div>
+            <div class="briefing-copy" id="briefing-copy">Add what matters today and JARVIS will tell you where to start.</div>
             <div class="briefing-actions"><button class="action-button" id="briefing-button">Refresh briefing</button><button class="quiet-button" id="review-button">Start daily review</button></div>
           </article>
 
@@ -74,7 +74,14 @@
 
           <article class="panel agenda-panel" data-section="overview agenda">
             <div class="panel-heading"><div><p class="eyebrow">NEXT UP</p><h2>Today's agenda</h2></div><button class="text-button" data-view-target="agenda">View all</button></div>
-            <div class="agenda-list" id="agenda-list"><div class="agenda-item"><time>09:00</time><div><strong>Deep work block</strong><span>Build the first useful slice</span></div><b class="tag blue">FOCUS</b></div><div class="agenda-item"><time>13:30</time><div><strong>Business review</strong><span>Check weekly performance signals</span></div><b class="tag orange">REVIEW</b></div><div class="agenda-item"><time>18:00</time><div><strong>Reset and plan</strong><span>Close loops before tomorrow</span></div><b class="tag green">PERSONAL</b></div></div>
+            <div class="agenda-list" id="agenda-list"><p class="muted">Connect Google sync for today's calendar, and PocketAthlete for training days.</p></div>
+          </article>
+
+          <article class="panel training-panel" data-section="overview agenda performance">
+            <div class="panel-heading"><div><p class="eyebrow">POCKETATHLETE</p><h2>Training and readiness</h2></div><button class="text-button" id="pa-settings">Settings</button></div>
+            <div class="training-list" id="training-list"></div>
+            <div class="training-actions"><button class="quiet-button" id="pa-refresh">Refresh training</button><button class="quiet-button" id="pa-push">Send readiness</button></div>
+            <p class="muted" id="pa-status"></p>
           </article>
 
           <article class="panel signal-panel" data-section="overview workbench">
@@ -95,15 +102,15 @@
           </article>
 
           <article class="panel momentum-panel" data-section="overview performance">
-            <div class="panel-heading"><div><p class="eyebrow">MOMENTUM</p><h2>Small wins compound</h2></div><span class="trend">+12%</span></div>
-            <div class="momentum-value">7.4<span>/10</span></div>
-            <div class="sparkline" aria-label="Momentum trend"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-            <p class="muted">Your consistency is up from last week.</p>
+            <div class="panel-heading"><div><p class="eyebrow">MOMENTUM</p><h2>Small wins compound</h2></div><span class="trend" id="momentum-trend"></span></div>
+            <div class="momentum-value"><span id="momentum-value">0</span><span> moves this week</span></div>
+            <div class="sparkline" id="momentum-sparkline" aria-label="Moves completed over the last 14 days"></div>
+            <p class="muted" id="momentum-note">Complete a move and this starts tracking.</p>
           </article>
 
           <article class="panel performance-panel" data-section="performance">
             <div class="panel-heading"><div><p class="eyebrow">PERFORMANCE LAB</p><h2>Signals worth watching</h2></div><span class="trend">THIS WEEK</span></div>
-            <div class="signal-grid"><div><strong id="completed-count">0</strong><span>moves completed</span></div><div><strong>04h 20m</strong><span>deep work target</span></div><div><strong>82%</strong><span>energy average</span></div></div>
+            <div class="signal-grid"><div><strong id="completed-count">0</strong><span>moves completed</span></div><div><strong id="focus-total">0m</strong><span>focus time logged</span></div><div><strong id="energy-average">—</strong><span>energy this week</span></div></div>
             <form class="metric-form" id="metric-form"><input id="metric-name" placeholder="Metric" aria-label="Metric name" /><input id="metric-value" type="number" min="0" step="0.1" placeholder="Value" aria-label="Metric value" /><select id="metric-area" aria-label="Metric area"><option value="study">Study hours</option><option value="business">Business revenue</option><option value="training">Training load</option><option value="wellbeing">Sleep hours</option></select><button type="submit" aria-label="Save metric">+</button></form>
             <div class="metric-list" id="metric-list"><p class="muted">Log a number to make progress visible.</p></div>
             <p class="muted">JARVIS tracks patterns to help you improve the system, not judge the person using it.</p>
@@ -150,9 +157,37 @@
         <p class="eyebrow">YOUR OPERATING CONTEXT</p>
         <h2>Make JARVIS yours</h2>
         <p class="muted">This context stays in this browser and helps the assistant make better tradeoffs.</p>
-        <div class="profile-grid"><label for="profile-name">Name<input id="profile-name" required /></label><label for="profile-university">University / course<input id="profile-university" placeholder="e.g. Computer Science at UCL" /></label><label for="profile-business">Business focus<input id="profile-business" placeholder="e.g. Creator account and client work" /></label><label for="profile-training">Training focus<input id="profile-training" placeholder="e.g. Football + strength" /></label></div>
+        <div class="profile-grid"><label for="profile-name">Name<input id="profile-name" placeholder="What should JARVIS call you?" /></label><label for="profile-university">University / course<input id="profile-university" placeholder="e.g. Computer Science at UCL" /></label><label for="profile-business">Business focus<input id="profile-business" placeholder="e.g. Creator account and client work" /></label><label for="profile-training">Training focus<input id="profile-training" placeholder="e.g. Football + strength" /></label></div>
         <div class="backup-actions"><button type="button" class="quiet-button" id="export-data">Export data</button><button type="button" class="quiet-button" id="import-data">Restore backup</button><input id="import-file" type="file" accept="application/json" hidden /></div>
         <div class="dialog-actions"><button type="button" class="quiet-button" id="profile-cancel">Cancel</button><button type="submit" class="action-button">Save context</button></div>
+      </form>
+    </dialog>
+    <dialog class="sync-dialog pocketathlete-dialog" id="pa-dialog">
+      <form method="dialog" id="pa-form">
+        <p class="eyebrow">CONNECTED APPS</p>
+        <h2>Link PocketAthlete</h2>
+        <p class="muted">Two tokens, minted inside PocketAthlete. They stay in this browser, and re-minting either one in PocketAthlete revokes the old value immediately.</p>
+        <div class="profile-grid">
+          <label for="pa-base">PocketAthlete API address<input id="pa-base" type="url" inputmode="url" placeholder="https://apex-api.fitnessguru.workers.dev" /></label>
+          <label for="pa-calendar-token">Training feed token<input id="pa-calendar-token" placeholder="From your calendar subscription link" autocomplete="off" /></label>
+          <label for="pa-ingest-token">Health push token<input id="pa-ingest-token" placeholder="The token in your Apple Health shortcut link" autocomplete="off" /></label>
+        </div>
+        <p class="muted pa-help">The <strong>training feed token</strong> is the <code>?token=</code> value in the calendar subscription URL PocketAthlete gives you. The <strong>health push token</strong> is the <code>?t=</code> value in your Apple Health upload link. Reading training needs Google sync connected too, because PocketAthlete&rsquo;s calendar feed is built for calendar apps and a browser is not allowed to read it directly.</p>
+        <div class="dialog-actions"><button type="button" class="quiet-button" id="pa-cancel">Cancel</button><button type="submit" class="action-button">Save and test</button></div>
+      </form>
+    </dialog>
+    <dialog class="sync-dialog readiness-dialog" id="readiness-dialog">
+      <form method="dialog" id="readiness-form">
+        <p class="eyebrow">SEND TO POCKETATHLETE</p>
+        <h2>This morning&rsquo;s readiness</h2>
+        <p class="muted">Anything you leave blank is not sent. PocketAthlete keeps a value you typed there by hand over one pushed from here.</p>
+        <div class="profile-grid">
+          <label for="readiness-date">Date<input id="readiness-date" type="date" /></label>
+          <label for="readiness-sleep">Sleep (hours)<input id="readiness-sleep" type="number" min="0" max="20" step="0.1" placeholder="7.5" /></label>
+          <label for="readiness-hrv">HRV (ms)<input id="readiness-hrv" type="number" min="0" max="500" step="1" placeholder="62" /></label>
+          <label for="readiness-rhr">Resting heart rate<input id="readiness-rhr" type="number" min="20" max="200" step="1" placeholder="52" /></label>
+        </div>
+        <div class="dialog-actions"><button type="button" class="quiet-button" id="readiness-cancel">Cancel</button><button type="submit" class="action-button">Send</button></div>
       </form>
     </dialog>
     <script type="module" src="app.js"></script>

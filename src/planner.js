@@ -34,6 +34,9 @@ const at = (day, minutes) => {
   return result;
 };
 
+const addDays = (date, count) => { const result = new Date(date); result.setDate(result.getDate() + count); return result; };
+const isoDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 /** Round up to the next quarter hour: a plan that starts at 14:07 is a plan
  *  nobody follows. */
 function nextQuarter(date) {
@@ -110,26 +113,42 @@ export function orderWork(tasks, now) {
  * no time and the reasons anything was left out. The caller renders it; nothing
  * here knows about the page.
  */
-export function buildPlan({ now = new Date(), events = [], training = [], tasks = [], energy = 'steady', dayEndHour = 21 } = {}) {
+export function buildPlan({ now = new Date(), events = [], training = [], tasks = [], energy = 'steady', dayEndHour = 21, dayStartHour = 9 } = {}) {
   const shape = SHAPES[energy] || SHAPES.steady;
-  const start = nextQuarter(now);
-  const dayEnd = at(now, dayEndHour * 60);
-  const commitments = training.filter((session) => !session.done).map((session) => ({
-    kind: 'training',
-    title: session.title,
-    detail: session.exerciseCount ? `${session.exerciseCount} exercises • you choose the time` : 'You choose the time',
-    minutes: TRAINING_COST_MINUTES
-  }));
 
-  if (dayEnd <= start) {
-    return { blocks: [], commitments, note: 'The day is done. Plan tomorrow in the morning, or log your review now.', capacityMinutes: 0 };
-  }
+  /**
+   * WHEN TODAY IS OVER, PLAN TOMORROW.
+   *
+   * This used to answer "the day is done, plan tomorrow in the morning" and
+   * schedule nothing — so the app's main button did nothing at all after nine
+   * in the evening, which is exactly when someone finishing up is most likely
+   * to want tomorrow settled. Planning the next morning is the useful answer,
+   * and saying which day it is for keeps it honest.
+   */
+  const todayEnd = at(now, dayEndHour * 60);
+  const forTomorrow = todayEnd.getTime() - nextQuarter(now).getTime() < MIN_USEFUL_BLOCK * 60000;
+  const start = forTomorrow ? at(addDays(now, 1), dayStartHour * 60) : nextQuarter(now);
+  const dayEnd = forTomorrow ? at(addDays(now, 1), dayEndHour * 60) : todayEnd;
+  const targetDate = isoDate(start);
+
+  // Sessions are matched to the day being planned rather than assumed to be
+  // today's, or a plan made at 10pm would carry today's training into tomorrow.
+  const commitments = training
+    .filter((session) => !session.done && (!session.date || session.date === targetDate))
+    .map((session) => ({
+      kind: 'training',
+      title: session.title,
+      detail: session.exerciseCount ? `${session.exerciseCount} exercises • you choose the time` : 'You choose the time',
+      minutes: TRAINING_COST_MINUTES
+    }));
 
   const gaps = freeGaps(start, dayEnd, events);
   // Training is not placed, but it does cost time, so it comes out of capacity
   // before anything is scheduled. This is what makes a training day plan lighter.
   let capacity = gaps.reduce((total, gap) => total + (gap.end - gap.start) / 60000, 0) - commitments.reduce((total, item) => total + item.minutes, 0);
-  const queue = orderWork(tasks, now);
+  // Ordered against the planning day, so "overdue" and "due today" mean what
+  // they should on the day the blocks actually fall.
+  const queue = orderWork(tasks, forTomorrow ? start : now);
   const blocks = [];
   let scheduled = 0;
   let index = 0;
@@ -165,7 +184,9 @@ export function buildPlan({ now = new Date(), events = [], training = [], tasks 
     commitments,
     capacityMinutes: Math.max(0, Math.round(capacity)),
     unscheduled: Math.max(0, queue.length - blocks.length),
-    note: planNote({ blocks, queue, commitments, energy, shape })
+    forTomorrow,
+    forDate: targetDate,
+    note: planNote({ blocks, queue, commitments, energy, shape, forTomorrow })
   };
 }
 
@@ -178,11 +199,15 @@ function describeTask(task, now) {
 }
 
 /** One sentence about the plan that is true of this plan, not of plans. */
-function planNote({ blocks, queue, commitments, energy, shape }) {
-  if (!queue.length) return 'Nothing is queued, so there is nothing to schedule. Add the one move that would make today count.';
-  if (!blocks.length) return 'Your calendar is full for the rest of today. Protect tomorrow morning instead of forcing work into the gaps.';
-  const training = commitments.length ? ` Training is set aside separately, so today is ${shape.block}-minute blocks rather than a full load.` : '';
+function planNote({ blocks, queue, commitments, energy, shape, forTomorrow }) {
+  const day = forTomorrow ? 'tomorrow' : 'today';
+  if (!queue.length) return `Nothing is queued, so there is nothing to schedule. Add the one move that would make ${day} count.`;
+  if (!blocks.length) return forTomorrow
+    ? 'Tomorrow is already full in your calendar. Protect one block by moving something, rather than forcing work into the gaps.'
+    : 'Your calendar is full for the rest of today. Protect tomorrow morning instead of forcing work into the gaps.';
+  const opener = forTomorrow ? 'Today is done, so this is tomorrow. ' : '';
+  const training = commitments.length ? ` Training is set aside separately, so ${day} is ${shape.block}-minute blocks rather than a full load.` : '';
   const left = queue.length - blocks.length;
   const energyNote = energy === 'low' ? 'Short blocks and real breaks, because you logged low energy.' : energy === 'sharp' ? 'Long blocks first, while the energy is there.' : 'Steady blocks with breaks between them.';
-  return `${energyNote}${training}${left ? ` ${left} more item${left === 1 ? ' stays' : 's stay'} in the queue for tomorrow.` : ''}`;
+  return `${opener}${energyNote}${training}${left ? ` ${left} more item${left === 1 ? ' stays' : 's stay'} in the queue for tomorrow.` : ''}`;
 }

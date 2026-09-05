@@ -25,7 +25,7 @@ let focusTimer;
 let focusSeconds = 0;
 let pendingImage = '';
 let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
-let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sacha Asw', university: '', business: '', training: '' };
+let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sacha', university: '', business: '', training: '' };
 let metrics = JSON.parse(localStorage.getItem('jarvis-metrics') || '[]');
 let objective = JSON.parse(localStorage.getItem('jarvis-objective') || 'null');
 let reviews = JSON.parse(localStorage.getItem('jarvis-reviews') || '[]');
@@ -38,6 +38,9 @@ let calendarEvents = [];
 let latestEmails = [];
 // Which domain the queue is filtered to, or '' for all of them.
 let areaFilter = '';
+// Which tab is showing. The plan panel's visibility depends on both the tab and
+// whether a plan exists, so one of them has to be readable from the other.
+let currentView = 'overview';
 let plan = JSON.parse(localStorage.getItem('jarvis-plan') || 'null');
 // Which reminders have already been announced, so a notification fires once
 // rather than every time the scheduler ticks.
@@ -224,7 +227,7 @@ function renderMetrics() {
 function createTaskFromForm() {
   const title = document.querySelector('#task-title').value.trim();
   if (!title) return null;
-  return { id: Date.now(), title, detail: 'Added from command queue', type: document.querySelector('#task-type').value, priority: document.querySelector('#task-priority').value, dueAt: document.querySelector('#task-due').value, objective: document.querySelector('#task-objective').checked, done: false, completedAt: '' };
+  return { id: newId(), title, detail: 'Added from command queue', type: document.querySelector('#task-type').value, priority: document.querySelector('#task-priority').value, dueAt: document.querySelector('#task-due').value, objective: document.querySelector('#task-objective').checked, done: false, completedAt: '' };
 }
 
 function applyDashboardSignals(dashboard) {
@@ -361,6 +364,21 @@ function setAreaFilter(area) {
   document.querySelector('#queue-eyebrow').textContent = areaFilter ? `COMMAND QUEUE • ${(AREA_LABELS[areaFilter] || areaFilter).toUpperCase()}` : 'COMMAND QUEUE';
   document.querySelector('#clear-filter').hidden = !areaFilter;
   renderTasks();
+}
+
+/**
+ * A genuinely unique id.
+ *
+ * These were all `Date.now()`, which collides whenever two records are created
+ * in the same millisecond — a quick capture followed by a command, an AI
+ * proposal adding several tasks at once, or any loop. Two tasks sharing an id
+ * is not cosmetic: the checkbox handler, the command line's complete, and the
+ * plan's block-to-task lookup all match by id and act on the FIRST one, so
+ * ticking one item silently completes another.
+ */
+function newId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** YYYY-MM-DD in the viewer's own timezone. Not toISOString(), which is UTC and
@@ -708,13 +726,16 @@ async function mirrorMetricToPocketAthlete(metric) {
  */
 function renderPlan() {
   const panel = document.querySelector('#plan-panel');
-  if (!plan || localDate(new Date(plan.builtAt)) !== localDate()) {
+  const planDate = plan?.forDate || (plan ? localDate(new Date(plan.builtAt)) : '');
+  if (!plan || planDate < localDate()) {
     // A plan from yesterday is not a plan. It is dropped rather than shown.
     if (plan) { plan = null; localStorage.removeItem('jarvis-plan'); }
     panel.hidden = true;
     return;
   }
-  panel.hidden = false;
+  // Both conditions, in one place: there is a plan AND this tab lists the panel.
+  panel.hidden = !panel.dataset.section.split(' ').includes(currentView);
+  if (panel.hidden) return;
 
   document.querySelector('#plan-commitments').replaceChildren(...plan.commitments.map((item) => {
     const row = document.createElement('div');
@@ -755,6 +776,7 @@ function renderPlan() {
 
   const heading = document.querySelector('#plan-heading');
   heading.textContent = plan.blocks.length ? `${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'}, ${plan.capacityMinutes} min still free` : 'Nothing scheduled';
+  panel.querySelector('.eyebrow').textContent = plan.forTomorrow ? "TOMORROW'S PLAN" : "TODAY'S PLAN";
   document.querySelector('#plan-note').textContent = plan.note;
 }
 
@@ -791,7 +813,7 @@ function tickFocus() {
   button.textContent = '◉';
   button.title = 'Start a focus session';
   const finished = activeFocus || { minutes: 25, taskId: null, title: 'Focus' };
-  const session = { id: `focus-${Date.now()}`, minutes: finished.minutes, taskId: finished.taskId, title: finished.title, completedAt: new Date().toISOString() };
+  const session = { id: `focus-${newId()}`, minutes: finished.minutes, taskId: finished.taskId, title: finished.title, completedAt: new Date().toISOString() };
   focusLog = [...focusLog, session].slice(-200);
   localStorage.setItem('jarvis-focus-log', JSON.stringify(focusLog));
   if (isConnected()) saveFocusSession(session).catch(() => null);
@@ -936,7 +958,7 @@ function handleAssistantCommand(command) {
   const parsed = parseCommand(command, { tasks, now: new Date() });
 
   if (parsed.intent === 'add') {
-    const task = { id: Date.now(), title: parsed.title, detail: 'Added from the command line', type: parsed.area, priority: parsed.priority, dueAt: parsed.dueAt, objective: false, done: false, completedAt: '' };
+    const task = { id: newId(), title: parsed.title, detail: 'Added from the command line', type: parsed.area, priority: parsed.priority, dueAt: parsed.dueAt, objective: false, done: false, completedAt: '' };
     tasks.push(task);
     persistTasks();
     renderTasks();
@@ -985,7 +1007,7 @@ function handleAssistantCommand(command) {
   if (parsed.intent === 'pulse') { document.querySelector(`[data-pulse="${parsed.pulse}"]`)?.click(); return `Logged your energy as ${parsed.pulse}. Plan the day again and the blocks will resize around it.`; }
 
   if (parsed.intent === 'metric') {
-    const metric = { id: Date.now(), name: parsed.name, value: parsed.value, area: parsed.area, unit: parsed.unit, createdAt: new Date().toISOString() };
+    const metric = { id: newId(), name: parsed.name, value: parsed.value, area: parsed.area, unit: parsed.unit, createdAt: new Date().toISOString() };
     metrics.push(metric);
     localStorage.setItem('jarvis-metrics', JSON.stringify(metrics));
     renderMetrics();
@@ -1050,7 +1072,7 @@ function renderAssistantProposals(result) {
     action.addEventListener('click', async () => {
       action.disabled = true;
       if (proposal.kind === 'task') {
-        const task = { id: Date.now(), title: proposal.title, detail: proposal.detail || 'Suggested by JARVIS', type: proposal.type || 'task', priority: proposal.priority || 'medium', dueAt: proposal.dueAt || '', done: false };
+        const task = { id: newId(), title: proposal.title, detail: proposal.detail || 'Suggested by JARVIS', type: proposal.type || 'task', priority: proposal.priority || 'medium', dueAt: proposal.dueAt || '', done: false };
         tasks.push(task);
         localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
         renderTasks();
@@ -1091,12 +1113,33 @@ async function submitAssistantCommand(command) {
   }
 }
 
+/**
+ * Ticking a task updates its row IN PLACE.
+ *
+ * A full re-render used to run here, and because the list sorts completed work
+ * to the bottom the row you just tapped jumped away from under your finger,
+ * with everything below it sliding up. On a phone that is how you tick the
+ * wrong thing: the item that takes the place of the one you hit is the next
+ * one you were about to read.
+ *
+ * So the row keeps its position and only its own state changes. The re-sort
+ * happens on the next full render — a reload, a tab change, an added task —
+ * by which point it is not moving under a finger that is still on the screen.
+ */
 taskList.addEventListener('change', (event) => {
   const id = String(event.target.dataset.taskId);
   const task = tasks.find((item) => String(item.id) === id);
   if (!task) return;
   setTaskDone(task, event.target.checked);
-  renderTasks();
+
+  const row = event.target.closest('.task');
+  if (row) row.classList.toggle('done', task.done);
+  focusCount.textContent = String(tasks.filter((item) => !item.done).length).padStart(2, '0');
+  document.querySelector('#completed-count').textContent = String(tasks.filter((item) => item.done).length).padStart(2, '0');
+  if (objective) renderObjective();
+  renderLifeGrid();
+  renderMomentum();
+
   if (isConnected()) updateTask(task).catch(() => showToast('Updated locally. Sync will retry later.'));
   refreshBriefing();
   showToast(task.done ? 'Move completed.' : 'Move restored.');
@@ -1123,7 +1166,7 @@ document.querySelector('#capture-form').addEventListener('submit', (event) => {
   const input = document.querySelector('#capture-input');
   const type = document.querySelector('#capture-type').value;
   if (!input.value.trim()) return;
-  tasks.push({ id: Date.now(), title: input.value.trim(), detail: `Quick capture • ${type}`, type, done: false });
+  tasks.push({ id: newId(), title: input.value.trim(), detail: `Quick capture • ${type}`, type, done: false });
   const capturedText = input.value.trim();
   localStorage.setItem('jarvis-tasks', JSON.stringify(tasks));
   input.value = '';
@@ -1146,7 +1189,7 @@ document.querySelector('#social-form').addEventListener('submit', (event) => {
   const channel = document.querySelector('#social-channel').value;
   const remindAt = document.querySelector('#social-date').value;
   if (!topic || !remindAt) { showToast('Add a topic and reminder time.'); return; }
-  const reminder = { id: Date.now(), topic, channel, remindAt, done: false };
+  const reminder = { id: newId(), topic, channel, remindAt, done: false };
   socialReminders.push(reminder);
   localStorage.setItem('jarvis-social', JSON.stringify(socialReminders));
   renderSocialReminders();
@@ -1166,7 +1209,7 @@ document.querySelector('#metric-form').addEventListener('submit', (event) => {
   const value = document.querySelector('#metric-value').value;
   const area = document.querySelector('#metric-area').value;
   if (!name || value === '') { showToast('Add a metric name and value.'); return; }
-  const metric = { id: Date.now(), name, value: Number(value), area, unit: '', createdAt: new Date().toISOString() };
+  const metric = { id: newId(), name, value: Number(value), area, unit: '', createdAt: new Date().toISOString() };
   metrics.push(metric);
   localStorage.setItem('jarvis-metrics', JSON.stringify(metrics));
   renderMetrics();
@@ -1249,12 +1292,14 @@ document.querySelector('#plan-day').addEventListener('click', () => {
   // Yesterday's energy is not today's. An old check-in is ignored rather than
   // used to shape a day it knows nothing about.
   const energy = pulse && localDate(new Date(pulse.savedAt)) === localDate() ? pulse.pulse : 'steady';
-  plan = { ...buildPlan({ now: new Date(), events: calendarEvents, training: training.sessions.filter((session) => session.date === localDate()), tasks, energy }), builtAt: new Date().toISOString(), energy };
+  plan = { ...buildPlan({ now: new Date(), events: calendarEvents, training: training.sessions, tasks, energy }), builtAt: new Date().toISOString(), energy };
   localStorage.setItem('jarvis-plan', JSON.stringify(plan));
   renderPlan();
   refreshBriefing();
   document.querySelector('#plan-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  showToast(plan.blocks.length ? `Planned ${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'} around your commitments.` : 'Nothing to schedule right now.');
+  showToast(plan.blocks.length
+    ? `Planned ${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'} for ${plan.forTomorrow ? 'tomorrow' : 'today'}.`
+    : 'Nothing to schedule right now.');
 });
 document.querySelector('#plan-clear').addEventListener('click', () => {
   plan = null;
@@ -1343,8 +1388,12 @@ document.querySelectorAll('[data-command]').forEach((button) => button.addEventL
 const VIEW_TITLES = { overview: '', agenda: 'Agenda', workbench: 'Workbench', performance: 'Performance', setup: 'Setup' };
 
 function showView(view) {
+  currentView = view;
   document.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
   document.querySelectorAll('[data-section]').forEach((panel) => { panel.hidden = !panel.dataset.section.split(' ').includes(view); });
+  // The plan panel has a second condition — whether a plan exists — so it gets
+  // the final say rather than being left un-hidden and empty.
+  renderPlan();
   document.querySelector('.hero-strip').hidden = view !== 'overview';
   document.querySelector('.life-grid').hidden = view !== 'overview';
   document.querySelector('#page-title').textContent = view === 'overview' ? greeting() : VIEW_TITLES[view];
@@ -1479,7 +1528,7 @@ document.querySelector('#readiness-form').addEventListener('submit', async (even
     showToast(result.days ? 'Sent to PocketAthlete.' : 'PocketAthlete kept the values you entered there by hand.');
     // Sleep is the one JARVIS also tracks, so it is worth keeping on both sides.
     if (Number.isFinite(reading.sleepHours)) {
-      const metric = { id: Date.now(), name: 'Sleep', value: reading.sleepHours, area: 'wellbeing', unit: 'h', createdAt: new Date(`${reading.date}T08:00:00`).toISOString() };
+      const metric = { id: newId(), name: 'Sleep', value: reading.sleepHours, area: 'wellbeing', unit: 'h', createdAt: new Date(`${reading.date}T08:00:00`).toISOString() };
       metrics.push(metric);
       localStorage.setItem('jarvis-metrics', JSON.stringify(metrics));
       renderMetrics();

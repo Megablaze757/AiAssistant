@@ -139,6 +139,21 @@ then escapes the whole description, so a joining comma and a comma inside a name
 *count* is exact; the names are shown as the sentence the feed sent rather than
 split into a list that would sometimes be wrong.
 
+## Planning late
+
+"Plan my day" used to answer *"the day is done, plan tomorrow in the morning"*
+and schedule nothing after your shutdown hour — so the app's main button did
+nothing at all after nine in the evening, which is exactly when someone
+finishing up wants tomorrow settled.
+
+When today no longer has a usable block left, it plans **tomorrow** instead,
+starting at your morning hour, and the panel says `TOMORROW'S PLAN` so it is
+never mistaken for tonight. Tomorrow's training session is the one it sets
+capacity aside for, not today's leftover.
+
+A plan is now considered stale by the day it is **for**, not the day it was
+built — so one made last night for today survives until today is over.
+
 ## Finding things
 
 The four tabs used to be decorative: twelve of the thirteen panels were tagged

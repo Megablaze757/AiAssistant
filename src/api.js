@@ -78,3 +78,10 @@ export async function saveSocialReminder(reminder) {
 export async function saveMetric(metric) {
   return sendCommand({ action: 'saveMetric', ...metric });
 }
+export async function saveObjective(objective) {
+  return sendCommand({ action: 'saveObjective', text: objective.text, weekStart: objective.weekStart });
+}
+
+export async function saveFocusSession(session) {
+  return sendCommand({ action: 'saveFocusSession', id: session.id, title: session.title, taskId: session.taskId, minutes: session.minutes, completedAt: session.completedAt });
+}

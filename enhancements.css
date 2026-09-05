@@ -50,7 +50,7 @@
 @media (max-width: 900px) { .life-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 720px) { .life-grid { grid-template-columns: 1fr 1fr; gap: 8px; }.life-card { min-height: 135px; padding: 14px; }.life-card strong { margin-top: 14px; font-size: 13px; }.life-card b { margin-top: 10px; font-size: 19px; }.hero-note { display: none; }.signal-grid { grid-template-columns: 1fr; }.signal-panel, .social-panel { grid-column: auto; }.social-form { grid-template-columns: 1fr 1fr; }.social-form input:first-child { grid-column: 1 / -1; }.social-form input[type="datetime-local"] { grid-column: 1 / -1; }.metric-form { grid-template-columns: 1fr 1fr; }.metric-form input:first-child, .metric-form select { grid-column: 1 / -1; } }
 @media (max-width: 720px) { .profile-grid { grid-template-columns: 1fr; } }
-@media (max-width: 390px) { .life-grid { grid-template-columns: 1fr; } }
+@media (max-width: 340px) { .life-grid { grid-template-columns: 1fr; } }
 /* PocketAthlete panel. Training days are all-day sessions in the feed, so a
    session row leads with a weekday rather than a clock time. */
 .training-panel { grid-column: 1 / -1; }
@@ -153,3 +153,49 @@
 .balance-key span { display: flex; align-items: center; gap: 5px; }
 .balance-key b { width: 7px; height: 7px; }
 .queue-hidden { margin-top: 12px; font-size: 11px; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   PHONE: TWO CONTROLS WERE UNREACHABLE.
+
+   This app is used from an iPhone home-screen shortcut, and the mobile
+   breakpoint hid `.hero-stat` and `.sidebar-foot` to save room. Between them
+   those hold "Plan my day" and the sync control — so on a phone the planner
+   could not be run and Google sync could not be connected AT ALL. Space is not
+   worth a feature you cannot reach.
+
+   Both come back, laid out for the narrow column rather than merely un-hidden.
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .hero-strip { display: grid; gap: 16px; }
+  .hero-stat { display: flex; align-items: center; gap: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .hero-stat strong { font-size: 26px; }
+  .hero-stat span { flex: 1; color: var(--muted); font-size: 11px; }
+  .hero-action { padding: 10px 14px; }
+
+  .sidebar-foot { display: flex; width: 100%; margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); }
+
+  /* Comfortable touch targets. 44px is Apple's minimum and several of these
+     were nearer 30. */
+  .icon-button { min-width: 44px; min-height: 44px; }
+  .life-card { min-height: 0; }
+  .plan-block, .training-item, .task { min-height: 60px; }
+  .command-chips button { min-height: 38px; }
+}
+
+/* Setup: one row per connection, state and control on the same line. */
+.setup-panel { grid-column: 1 / -1; }
+.setup-list { display: grid; gap: 9px; margin-bottom: 26px; }
+.setup-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #1e3147; }
+.setup-row div { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.setup-row strong { font-size: 14px; }
+.setup-row small { color: var(--muted); font-size: 12px; }
+.setup-state { padding: 4px 7px; color: var(--muted); background: #2a3647; font: 500 9px 'DM Mono', monospace; }
+.setup-state.is-on { color: var(--green); background: #30483e; }
+.feature-index { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.feature-index b { color: var(--ink); font-weight: 600; }
+.feature-index code { color: var(--cyan); font-family: 'DM Mono', monospace; font-size: 11px; }
+
+/* The top-bar glyphs carry their names now. */
+.icon-button { display: inline-flex; align-items: center; gap: 6px; }
+.icon-button b { font: 500 10px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 720px) { .icon-button b { display: none; } .setup-row { flex-wrap: wrap; } .setup-row div { flex-basis: 100%; } }

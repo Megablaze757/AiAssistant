@@ -25,6 +25,7 @@ const SHELL = [
   './src/planner.js',
   './src/briefing.js',
   './src/insights.js',
+  './sw.js',
   './src/commands.js',
   './src/pocketathlete.js',
   './manifest.webmanifest'

@@ -1,4 +1,4 @@
-import { askAssistant, createCalendarEvent, isConnected, pullPocketAthleteTraining, requestDashboard, saveCapture, saveMetric, savePocketAthleteConfig, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
+import { askAssistant, createCalendarEvent, isConnected, pullPocketAthleteTraining, requestDashboard, saveCapture, saveFocusSession, saveMetric, saveObjective, savePocketAthleteConfig, savePulse, saveReview, saveSocialReminder, saveTask, updateTask } from './src/api.js';
 import { buildPlan } from './src/planner.js';
 import { buildBriefing } from './src/briefing.js';
 import { areaSplit, completionsByDay as completionsFor, domainStatus, daysUntil, momentumInsight, nextDeadline, streak } from './src/insights.js';
@@ -25,7 +25,7 @@ let focusTimer;
 let focusSeconds = 0;
 let pendingImage = '';
 let socialReminders = JSON.parse(localStorage.getItem('jarvis-social') || '[]');
-let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: '', university: '', business: '', training: '' };
+let profile = JSON.parse(localStorage.getItem('jarvis-profile') || 'null') || { name: 'Sacha Asw', university: '', business: '', training: '' };
 let metrics = JSON.parse(localStorage.getItem('jarvis-metrics') || '[]');
 let objective = JSON.parse(localStorage.getItem('jarvis-objective') || 'null');
 let reviews = JSON.parse(localStorage.getItem('jarvis-reviews') || '[]');
@@ -47,7 +47,8 @@ let activeFocus = JSON.parse(localStorage.getItem('jarvis-active-focus') || 'nul
 function greeting() {
   const hour = new Date().getHours();
   const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  return profile.name ? `${part}, ${profile.name}.` : `${part}.`;
+  const firstName = profile.name.trim().split(/\s+/)[0];
+  return firstName ? `${part}, ${firstName}.` : `${part}.`;
 }
 
 function updateDate() {
@@ -233,6 +234,19 @@ function applyDashboardSignals(dashboard) {
   localStorage.setItem('jarvis-social', JSON.stringify(socialReminders));
   renderSocialReminders();
   if (dashboard.metrics) { metrics = dashboard.metrics; localStorage.setItem('jarvis-metrics', JSON.stringify(metrics)); renderMetrics(); }
+  if (Array.isArray(dashboard.focusLog) && dashboard.focusLog.length) {
+    // The sheet is the record across devices; a session logged offline here is
+    // merged in rather than dropped, and ids keep it from doubling.
+    const known = new Set(dashboard.focusLog.map((entry) => String(entry.id)));
+    focusLog = [...dashboard.focusLog.map((entry) => ({ ...entry, minutes: Number(entry.minutes) || 0 })), ...focusLog.filter((entry) => !known.has(String(entry.id)))].slice(-200);
+    localStorage.setItem('jarvis-focus-log', JSON.stringify(focusLog));
+    renderPerformance();
+  }
+  if (dashboard.objective?.text && !objective) {
+    objective = { text: dashboard.objective.text, savedAt: dashboard.objective.createdAt || new Date().toISOString() };
+    localStorage.setItem('jarvis-objective', JSON.stringify(objective));
+    renderObjective();
+  }
 }
 
 function notifyUpcoming() {
@@ -777,8 +791,10 @@ function tickFocus() {
   button.textContent = '◉';
   button.title = 'Start a focus session';
   const finished = activeFocus || { minutes: 25, taskId: null, title: 'Focus' };
-  focusLog = [...focusLog, { minutes: finished.minutes, taskId: finished.taskId, title: finished.title, completedAt: new Date().toISOString() }].slice(-200);
+  const session = { id: `focus-${Date.now()}`, minutes: finished.minutes, taskId: finished.taskId, title: finished.title, completedAt: new Date().toISOString() };
+  focusLog = [...focusLog, session].slice(-200);
   localStorage.setItem('jarvis-focus-log', JSON.stringify(focusLog));
+  if (isConnected()) saveFocusSession(session).catch(() => null);
   activeFocus = null;
   localStorage.removeItem('jarvis-active-focus');
   renderPerformance();
@@ -982,6 +998,7 @@ function handleAssistantCommand(command) {
   if (parsed.intent === 'objective') {
     objective = { text: parsed.text, savedAt: new Date().toISOString() };
     localStorage.setItem('jarvis-objective', JSON.stringify(objective));
+    if (isConnected()) saveObjective(objective).catch(() => null);
     renderObjective();
     refreshBriefing();
     return `Weekly objective set: “${parsed.text}”. Tick “counts toward this week's objective” on the moves that serve it.`;
@@ -1168,6 +1185,7 @@ document.querySelector('#objective-form').addEventListener('submit', (event) => 
   const area = lowerText.includes('study') || lowerText.includes('assignment') ? 'study' : lowerText.includes('business') || lowerText.includes('revenue') ? 'business' : lowerText.includes('train') || lowerText.includes('gym') ? 'training' : 'coding';
   objective = { text, area, savedAt: new Date().toISOString() };
   localStorage.setItem('jarvis-objective', JSON.stringify(objective));
+  if (isConnected()) saveObjective(objective).catch(() => showToast('Objective saved locally. Sync will retry later.'));
   renderObjective();
   refreshBriefing();
   document.querySelector('#objective-input').value = '';
@@ -1322,12 +1340,59 @@ assistantInput.addEventListener('keydown', (event) => {
   submitAssistantCommand(assistantInput.value);
 });
 document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => submitAssistantCommand(button.dataset.command)));
-document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
-  const view = button.dataset.view;
-  document.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item === button));
+const VIEW_TITLES = { overview: '', agenda: 'Agenda', workbench: 'Workbench', performance: 'Performance', setup: 'Setup' };
+
+function showView(view) {
+  document.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
   document.querySelectorAll('[data-section]').forEach((panel) => { panel.hidden = !panel.dataset.section.split(' ').includes(view); });
-  document.querySelector('#page-title').textContent = view === 'overview' ? greeting() : `${view[0].toUpperCase()}${view.slice(1)} mode`;
-}));
+  document.querySelector('.hero-strip').hidden = view !== 'overview';
+  document.querySelector('.life-grid').hidden = view !== 'overview';
+  document.querySelector('#page-title').textContent = view === 'overview' ? greeting() : VIEW_TITLES[view];
+  if (view === 'setup') renderSetup();
+  localStorage.setItem('jarvis-view', view);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
+
+/**
+ * The Setup tab.
+ *
+ * Every connection was behind a different unlabelled control — sync in the
+ * sidebar, PocketAthlete inside its own panel, reminders behind a ♢ glyph — so
+ * "what is this connected to" had no answer anywhere. This is that answer, and
+ * each row both reports its state and is the way to change it.
+ */
+function renderSetup() {
+  const set = (key, on, label) => {
+    const state = document.querySelector(`#setup-${key}-state`);
+    state.textContent = label;
+    state.className = `setup-state${on ? ' is-on' : ''}`;
+  };
+  set('google', isConnected(), isConnected() ? 'ON' : 'OFF');
+  document.querySelector('#setup-google').textContent = isConnected() ? 'Change' : 'Connect';
+
+  const pa = readPocketAthleteConfig();
+  const paOn = Boolean(pa.calendarToken || pa.ingestToken);
+  set('pa', paOn, !paOn ? 'OFF' : pa.calendarToken && pa.ingestToken ? 'ON' : 'PART');
+  document.querySelector('#setup-pa-note').textContent = !paOn
+    ? 'Your training programme in, sleep and readiness out.'
+    : pa.calendarToken && pa.ingestToken
+      ? training.configured ? `Training synced. ${training.sessions.length} sessions known.` : 'Both tokens saved. Connect Google sync to read the programme.'
+      : pa.calendarToken ? 'Training feed only — add the health token to push readiness.' : 'Health push only — add the feed token to read your programme.';
+
+  const permission = 'Notification' in window ? Notification.permission : 'unsupported';
+  set('alerts', permission === 'granted', permission === 'granted' ? 'ON' : permission === 'denied' ? 'BLOCKED' : permission === 'unsupported' ? 'N/A' : 'OFF');
+
+  set('profile', Boolean(profile.name), profile.name ? 'SET' : 'EMPTY');
+  document.querySelector('#setup-profile-note').textContent = [profile.name, profile.university, profile.business, profile.training].filter(Boolean).join(' • ') || 'Name, course, business and training focus.';
+}
+
+document.querySelector('#setup-google').addEventListener('click', () => document.querySelector('#sync-control').click());
+document.querySelector('#setup-pa').addEventListener('click', () => document.querySelector('#pa-settings').click());
+document.querySelector('#setup-alerts').addEventListener('click', () => { notifyUpcoming(); window.setTimeout(renderSetup, 400); });
+document.querySelector('#setup-profile').addEventListener('click', () => document.querySelector('#profile-button').click());
+document.querySelector('#setup-backup').addEventListener('click', () => document.querySelector('#export-data').click());
 document.querySelectorAll('[data-view-target]').forEach((button) => button.addEventListener('click', () => document.querySelector(`[data-view="${button.dataset.viewTarget}"]`).click()));
 
 document.querySelector('#pa-settings').addEventListener('click', () => {
@@ -1427,6 +1492,8 @@ document.querySelector('#readiness-form').addEventListener('submit', async (even
 
 document.querySelectorAll('[data-area]').forEach((card) => card.addEventListener('click', () => setAreaFilter(card.dataset.area)));
 document.querySelector('#clear-filter').addEventListener('click', () => setAreaFilter(''));
+
+showView(localStorage.getItem('jarvis-view') || 'overview');
 
 renderTasks();
 renderPlan();

@@ -20,6 +20,7 @@
           <button class="nav-item" data-view="agenda"><span>◷</span> Agenda</button>
           <button class="nav-item" data-view="workbench"><span>⌘</span> Workbench</button>
           <button class="nav-item" data-view="performance"><span>↗</span> Performance</button>
+          <button class="nav-item" data-view="setup"><span>⚙</span> Setup</button>
         </nav>
         <button class="sidebar-foot sync-control" id="sync-control" type="button"><span class="status-dot"></span><span id="sync-label">Local mode</span><span class="sync-arrow">↗</span></button>
       </aside>
@@ -30,7 +31,7 @@
             <p class="eyebrow" id="current-date"></p>
             <h1 id="page-title"></h1>
           </div>
-          <div class="top-actions"><button class="icon-button" id="profile-button" aria-label="Open profile settings" title="Profile settings">◎</button><button class="icon-button" id="notify-button" aria-label="Enable reminders" title="Enable reminders">♢</button><button class="icon-button" id="focus-button" aria-label="Start a 25 minute focus session" title="Start a 25 minute focus session">◉</button></div>
+          <div class="top-actions"><button class="icon-button" id="profile-button" aria-label="Open profile settings"><span>◎</span><b>Profile</b></button><button class="icon-button" id="notify-button" aria-label="Enable reminders"><span>♢</span><b>Alerts</b></button><button class="icon-button" id="focus-button" aria-label="Start a focus session"><span>◉</span><b>Focus</b></button></div>
         </header>
 
         <section class="hero-strip" aria-label="Daily focus">
@@ -53,18 +54,39 @@
         </section>
 
         <section class="content-grid" id="app-view">
+          <article class="panel setup-panel" data-section="setup">
+            <div class="panel-heading"><div><p class="eyebrow">SETUP</p><h2>Connections</h2></div></div>
+            <div class="setup-list">
+              <div class="setup-row"><div><strong>Google sync</strong><small id="setup-google-note">Tasks, calendar, mail and every log, saved to your spreadsheet.</small></div><span class="setup-state" id="setup-google-state">OFF</span><button class="quiet-button" id="setup-google">Connect</button></div>
+              <div class="setup-row"><div><strong>PocketAthlete</strong><small id="setup-pa-note">Your training programme in, sleep and readiness out.</small></div><span class="setup-state" id="setup-pa-state">OFF</span><button class="quiet-button" id="setup-pa">Set up</button></div>
+              <div class="setup-row"><div><strong>Reminders</strong><small id="setup-alerts-note">Be told when something is due, while JARVIS is open.</small></div><span class="setup-state" id="setup-alerts-state">OFF</span><button class="quiet-button" id="setup-alerts">Turn on</button></div>
+              <div class="setup-row"><div><strong>Your context</strong><small id="setup-profile-note">Name, course, business and training focus.</small></div><span class="setup-state" id="setup-profile-state">SET</span><button class="quiet-button" id="setup-profile">Edit</button></div>
+              <div class="setup-row"><div><strong>Backup</strong><small>Everything in this browser, as one file you keep.</small></div><span class="setup-state">FILE</span><button class="quiet-button" id="setup-backup">Export</button></div>
+            </div>
+            <div class="panel-heading"><div><p class="eyebrow">WHAT IT DOES</p><h2>Where everything lives</h2></div></div>
+            <ul class="feature-index">
+              <li><b>Overview</b> what to do now: the plan, the briefing, your queue and the command line.</li>
+              <li><b>Agenda</b> when: today&rsquo;s plan and calendar, training days, and your energy check-in.</li>
+              <li><b>Workbench</b> doing: the full queue, quick capture, posting reminders and important mail.</li>
+              <li><b>Performance</b> how it is going: streak, where your effort went, the weekly objective and your numbers.</li>
+              <li><b>Plan my day</b> builds real time blocks around your calendar and energy. Tap a block to start a focus session on it.</li>
+              <li><b>The life cards</b> judge each area &mdash; slipping, stalled, moving &mdash; and filter the queue when tapped.</li>
+              <li><b>The command line</b> works offline: <code>add finish the essay by friday 5pm</code>, <code>what is due</code>, <code>plan my day</code>. Type <code>help</code> for the full list.</li>
+            </ul>
+          </article>
+
           <article class="panel priorities-panel" data-section="overview workbench">
             <div class="panel-heading"><div><p class="eyebrow" id="queue-eyebrow">COMMAND QUEUE</p><h2>Priority moves</h2></div><div class="queue-actions"><button class="text-button" id="clear-filter" hidden>Show all</button><button class="text-button" id="add-task">+ Add</button></div></div>
             <div class="task-list" id="task-list"></div>
           </article>
 
-          <article class="panel briefing-panel" data-section="overview workbench">
+          <article class="panel briefing-panel" data-section="overview">
             <div class="panel-heading"><div><p class="eyebrow">JARVIS BRIEFING</p><h2>What deserves your attention</h2></div><span class="ai-badge" id="briefing-badge">LOCAL</span></div>
             <div class="briefing-copy" id="briefing-copy">Add what matters today and JARVIS will tell you where to start.</div>
             <div class="briefing-actions"><button class="action-button" id="briefing-button">Refresh briefing</button><button class="quiet-button" id="review-button">Start daily review</button></div>
           </article>
 
-          <article class="panel objective-panel" data-section="overview performance">
+          <article class="panel objective-panel" data-section="performance">
             <div class="panel-heading"><div><p class="eyebrow">WEEKLY OBJECTIVE</p><h2>One outcome that matters</h2></div><span class="trend" id="objective-progress">0%</span></div>
             <div class="objective-copy" id="objective-copy">Choose the outcome that would make this week feel meaningful.</div>
             <form class="objective-form" id="objective-form"><input id="objective-input" placeholder="e.g. Ship the landing page" aria-label="Weekly objective" /><button type="submit" aria-label="Save weekly objective">Save</button></form>
@@ -79,37 +101,37 @@
             <div class="command-chips"><button type="button" data-command="What should I do next?">Briefing</button><button type="button" data-command="What is due">What&rsquo;s due</button><button type="button" data-command="Show my open work">Open work</button><button type="button" data-command="Plan my day">Plan my day</button><button type="button" data-command="help">What can you do?</button></div>
           </article>
 
-          <article class="panel agenda-panel" data-section="overview agenda">
+          <article class="panel agenda-panel" data-section="agenda">
             <div class="panel-heading"><div><p class="eyebrow">NEXT UP</p><h2>Today's agenda</h2></div><button class="text-button" data-view-target="agenda">View all</button></div>
             <div class="agenda-list" id="agenda-list"><p class="muted">Connect Google sync for today's calendar, and PocketAthlete for training days.</p></div>
           </article>
 
-          <article class="panel training-panel" data-section="overview agenda performance">
+          <article class="panel training-panel" data-section="agenda performance">
             <div class="panel-heading"><div><p class="eyebrow">POCKETATHLETE</p><h2>Training and readiness</h2></div><button class="text-button" id="pa-settings">Settings</button></div>
             <div class="training-list" id="training-list"></div>
             <div class="training-actions"><button class="quiet-button" id="pa-refresh">Refresh training</button><button class="quiet-button" id="pa-push">Send readiness</button></div>
             <p class="muted" id="pa-status"></p>
           </article>
 
-          <article class="panel signal-panel" data-section="overview workbench">
+          <article class="panel signal-panel" data-section="workbench">
             <div class="panel-heading"><div><p class="eyebrow">SIGNAL WATCH</p><h2>Important inbox</h2></div><button class="text-button" id="refresh-signals">Refresh</button></div>
             <div class="email-list" id="email-list"><p class="muted">Connect Google sync to surface important mail without reading your whole inbox.</p></div>
           </article>
 
-          <article class="panel social-panel" data-section="overview workbench">
+          <article class="panel social-panel" data-section="workbench">
             <div class="panel-heading"><div><p class="eyebrow">SOCIAL ENGINE</p><h2>Post with intention</h2></div><span class="ai-badge" id="social-badge">0 SCHEDULED</span></div>
             <form class="social-form" id="social-form"><input id="social-topic" placeholder="What should you post about?" aria-label="Social post topic" /><select id="social-channel" aria-label="Social channel"><option>Instagram</option><option>TikTok</option><option>LinkedIn</option><option>X</option></select><input id="social-date" type="datetime-local" aria-label="Post reminder date and time" /><button type="submit" aria-label="Save social reminder">+</button></form>
             <div class="social-list" id="social-list"><p class="muted">No posting reminders yet.</p></div>
             <p class="muted reminder-note" id="reminder-note"></p>
           </article>
 
-          <article class="panel pulse-panel" data-section="overview agenda performance">
+          <article class="panel pulse-panel" data-section="overview agenda">
             <div class="panel-heading"><div><p class="eyebrow">DAILY PULSE</p><h2>How are you arriving?</h2></div><span class="ai-badge" id="pulse-status">NOT LOGGED</span></div>
             <p class="muted">A useful plan starts with the person, not the backlog.</p>
             <div class="pulse-actions"><button type="button" data-pulse="low">Low battery</button><button type="button" data-pulse="steady">Steady</button><button type="button" data-pulse="sharp">Sharp</button></div>
           </article>
 
-          <article class="panel momentum-panel" data-section="overview performance">
+          <article class="panel momentum-panel" data-section="performance">
             <div class="panel-heading"><div><p class="eyebrow">MOMENTUM</p><h2>Small wins compound</h2></div><span class="trend" id="momentum-trend"></span></div>
             <div class="momentum-value"><span id="momentum-value">0</span><span id="momentum-unit"> day streak</span></div>
             <div class="sparkline" id="momentum-sparkline" aria-label="Moves completed over the last 14 days"></div>
@@ -126,7 +148,7 @@
             <p class="muted">JARVIS tracks patterns to help you improve the system, not judge the person using it.</p>
           </article>
 
-          <article class="panel capture-panel" data-section="overview workbench">
+          <article class="panel capture-panel" data-section="workbench">
             <p class="eyebrow">QUICK CAPTURE</p>
             <h2>Get it out of your head.</h2>
             <form id="capture-form"><input id="capture-input" type="text" placeholder="A thought, task, or idea..." aria-label="Quick capture" /><select id="capture-type" aria-label="Capture type"><option value="task">Task</option><option value="idea">Idea</option><option value="business">Business</option></select><button type="submit" aria-label="Capture item">→</button></form>

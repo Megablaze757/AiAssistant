@@ -23,18 +23,22 @@ const SHEETS = {
   pulses: 'Pulses',
   workouts: 'Workouts',
   metrics: 'Metrics',
-  social: 'Social'
+  social: 'Social',
+  objectives: 'Objectives',
+  focus: 'Focus'
 };
 
 function setupJarvis() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  createSheet_(spreadsheet, SHEETS.tasks, ['id', 'title', 'detail', 'type', 'priority', 'dueAt', 'done', 'createdAt', 'completedAt']);
+  createSheet_(spreadsheet, SHEETS.tasks, ['id', 'title', 'detail', 'type', 'priority', 'dueAt', 'done', 'createdAt', 'completedAt', 'objective']);
   createSheet_(spreadsheet, SHEETS.captures, ['id', 'text', 'type', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.reviews, ['id', 'note', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.pulses, ['id', 'energy', 'note', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.workouts, ['id', 'name', 'durationMinutes', 'intensity', 'notes', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.metrics, ['id', 'area', 'name', 'value', 'unit', 'createdAt']);
   createSheet_(spreadsheet, SHEETS.social, ['id', 'topic', 'channel', 'remindAt', 'done', 'createdAt']);
+  createSheet_(spreadsheet, SHEETS.objectives, ['id', 'text', 'weekStart', 'createdAt']);
+  createSheet_(spreadsheet, SHEETS.focus, ['id', 'title', 'taskId', 'minutes', 'completedAt']);
   PropertiesService.getScriptProperties().setProperty('JARVIS_SHEET_ID', spreadsheet.getId());
   return json_({ ok: true, message: 'JARVIS is ready.' });
 }
@@ -63,6 +67,8 @@ function doPost(event) {
     if (action === 'savePocketAthleteConfig') return json_({ ok: true, config: savePocketAthleteConfig_(request) });
     if (action === 'pullPocketAthleteTraining') return json_({ ok: true, training: pullPocketAthleteTraining_() });
     if (action === 'saveMetric') return json_({ ok: true, metric: saveMetric_(request) });
+    if (action === 'saveObjective') return json_({ ok: true, objective: saveObjective_(request) });
+    if (action === 'saveFocusSession') return json_({ ok: true, focus: saveFocusSession_(request) });
     if (action === 'assistant') return json_({ ok: true, ...askAssistant_(request) });
     if (action === 'saveSocialReminder') return json_({ ok: true, reminder: saveSocialReminder_(request) });
     if (action === 'createCalendarEvent') return json_({ ok: true, event: createCalendarEvent_(request) });
@@ -82,7 +88,8 @@ function getDashboard_() {
     dueAt: row.dueAt || '',
     done: row.done === true || row.done === 'TRUE',
     createdAt: row.createdAt,
-    completedAt: row.completedAt
+    completedAt: row.completedAt,
+    objective: row.objective === true || row.objective === 'TRUE'
   }));
   const now = new Date();
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -93,7 +100,7 @@ function getDashboard_() {
     end: item.getEndTime().toISOString(),
     location: item.getLocation()
   }));
-  return { ok: true, tasks: tasks, calendar: calendar, importantEmails: getImportantEmails_(), socialReminders: readRows_(SHEETS.social), lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics), training: pullPocketAthleteTraining_() };
+  return { ok: true, tasks: tasks, calendar: calendar, importantEmails: getImportantEmails_(), socialReminders: readRows_(SHEETS.social), lastReview: latestRow_(SHEETS.reviews), lastPulse: latestRow_(SHEETS.pulses), workouts: readRows_(SHEETS.workouts), metrics: readRows_(SHEETS.metrics), objective: latestRow_(SHEETS.objectives), focusLog: readRows_(SHEETS.focus), training: pullPocketAthleteTraining_() };
 }
 
 function addTask_(request) {
@@ -106,7 +113,8 @@ function addTask_(request) {
     dueAt: request.dueAt || '',
     done: false,
     createdAt: new Date().toISOString(),
-    completedAt: ''
+    completedAt: '',
+    objective: request.objective === true || request.objective === 'true'
   };
   appendRow_(SHEETS.tasks, task);
   return task;
@@ -439,4 +447,56 @@ function recordTrainingSessions_(sessions) {
       createdAt: session.date
     });
   });
+}
+
+/**
+ * The weekly objective, kept as a row per week rather than one overwritten cell.
+ *
+ * Re-stating the objective inside the same week replaces that week's row; a new
+ * week appends. That keeps a real history of what each week was for, which a
+ * single overwritten value throws away — and it is the record a later review or
+ * summary actually needs.
+ */
+function saveObjective_(request) {
+  var text = required_(request.text, 'text');
+  var weekStart = request.weekStart || mondayOf_(new Date());
+  var sheet = getSheet_(SHEETS.objectives);
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0].map(function (header) { return String(header); });
+  var weekColumn = headers.indexOf('weekStart');
+  var textColumn = headers.indexOf('text');
+  for (var row = 1; row < values.length; row += 1) {
+    if (weekColumn < 0 || String(values[row][weekColumn]) !== String(weekStart)) continue;
+    sheet.getRange(row + 1, textColumn + 1).setValue(text);
+    return { id: values[row][0], text: text, weekStart: weekStart };
+  }
+  var objective = { id: Utilities.getUuid(), text: text, weekStart: weekStart, createdAt: new Date().toISOString() };
+  appendRow_(SHEETS.objectives, objective);
+  return objective;
+}
+
+/** The Monday of a date's week, as YYYY-MM-DD. */
+function mondayOf_(date) {
+  var monday = new Date(date.getTime());
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return Utilities.formatDate(monday, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/**
+ * One completed focus session.
+ *
+ * Deduplicated on the id the browser generated, because a session logged
+ * offline is re-sent when sync returns and would otherwise be counted twice.
+ */
+function saveFocusSession_(request) {
+  var session = {
+    id: request.id || Utilities.getUuid(),
+    title: request.title || 'Focus',
+    taskId: request.taskId || '',
+    minutes: required_(request.minutes, 'minutes'),
+    completedAt: request.completedAt || new Date().toISOString()
+  };
+  var exists = readRows_(SHEETS.focus).some(function (row) { return String(row.id) === String(session.id); });
+  if (!exists) appendRow_(SHEETS.focus, session);
+  return session;
 }

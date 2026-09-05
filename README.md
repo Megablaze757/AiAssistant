@@ -139,6 +139,64 @@ then escapes the whole description, so a joining comma and a comma inside a name
 *count* is exact; the names are shown as the sentence the feed sent rather than
 split into a list that would sometimes be wrong.
 
+## Finding things
+
+The four tabs used to be decorative: twelve of the thirteen panels were tagged
+`overview`, so Overview was the whole app and switching tabs only ever removed a
+few things. On a phone that was a 13,000-pixel scroll.
+
+Each tab now answers one question, and Overview is a summary again:
+
+| Tab | Question | Panels |
+| --- | --- | --- |
+| **Overview** | What do I do now? | Plan, queue, briefing, command line, energy |
+| **Agenda** | When? | Plan, calendar, training, energy |
+| **Workbench** | Doing | Queue, capture, posting reminders, important mail |
+| **Performance** | How is it going? | Streak, effort split, objective, your numbers |
+| **Setup** | What is connected? | Every integration, and where each feature lives |
+
+The same page on a phone went from 13,443px to 2,210px.
+
+**Setup** is the answer to "where is that thing". It lists every connection with
+its live state — Google sync, PocketAthlete (and whether it has one token or
+both), reminders, your context, backup — and each row is also the way to change
+it. Under that is a short index of what the app does and which tab it is on.
+
+The top-bar glyphs `◎ ♢ ◉` now carry labels (Profile, Alerts, Focus) on a wide
+screen. A title attribute is invisible on a touch screen, where there is no
+hover.
+
+## On a phone
+
+The app is used from an iPhone home-screen shortcut, and two controls were
+unreachable there. The mobile breakpoint hid `.hero-stat` and `.sidebar-foot` to
+save room, and between them those hold **Plan my day** and the **sync control** —
+so on a phone the planner could not be run and Google sync could not be
+connected at all. Both are back, laid out for the narrow column.
+
+The life cards also collapsed to one per row at `max-width: 390px`, which is
+exactly the iPhone 13/14/15 width — so the most common phone got four
+full-width cards before anything else. That breakpoint is now 340px.
+
+Tap targets on the plan blocks, training rows, tasks and icon buttons are at
+least 44px.
+
+## What is saved where
+
+With Google sync connected, everything lands in your spreadsheet: `Tasks`
+(including the weekly-objective link), `Captures`, `Reviews`, `Pulses`,
+`Workouts`, `Metrics`, `Social`, and two new sheets — `Objectives`, one row per
+week so the history of what each week was for survives, and `Focus`, one row per
+completed session, deduplicated on the id the browser generated so a session
+logged offline is not counted twice when sync returns.
+
+The weekly objective and your focus sessions used to live only in the browser
+that created them. They now come back on any device that opens the app.
+
+**Run `setupJarvis` once more** after updating the Apps Script deployment. It
+adds the new sheets and the `objective` column to existing ones rather than
+needing a new spreadsheet.
+
 ## What each control actually does
 
 Several features looked like features and did nothing. They now do the thing

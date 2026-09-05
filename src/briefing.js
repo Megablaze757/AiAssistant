@@ -16,7 +16,11 @@
  * inputs instead of by pressing refresh and reading the copy.
  */
 
+import { domainStatus } from './insights.js';
+
 const HOUR = 3600000;
+const AREAS = ['study', 'training', 'coding', 'business'];
+const AREA_LABELS = { study: 'university', training: 'training', coding: 'build', business: 'business' };
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const localDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -33,6 +37,16 @@ const quote = (text) => `“${text}”`;
  * morning — which is both wrong and needlessly bleak on a day there is still
  * time to use.
  */
+/** "tomorrow", "on Friday", or a date — whichever reads naturally. */
+function daysBetween(now, due) {
+  const start = new Date(now); start.setHours(0, 0, 0, 0);
+  const target = new Date(due); target.setHours(0, 0, 0, 0);
+  const days = Math.round((target - start) / (24 * HOUR));
+  if (days === 1) return 'tomorrow';
+  if (days <= 6) return `on ${due.toLocaleDateString([], { weekday: 'long' })}`;
+  return `on ${due.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
+}
+
 function weekProgress(now) {
   const day = (now.getDay() + 6) % 7;
   return Math.min(1, Math.max(0, (day + now.getHours() / 24) / 7));
@@ -80,6 +94,25 @@ export function collectSignals({ now = new Date(), tasks = [], calendar = [], tr
       detail: dueToday.length === 1
         ? `${quote(next.title)} is due at ${time(new Date(next.dueAt))}${hoursLeft <= 3 ? ' — under three hours away' : ''}.`
         : `${plural(dueToday.length, 'item')} are due today, starting with ${quote(next.title)} at ${time(new Date(next.dueAt))}.`
+    });
+  }
+
+  // Deadlines past today. Without this a briefing could report "nothing is
+  // pressing" on a day something is due tomorrow morning, which is exactly when
+  // being told would have helped.
+  const soon = dated
+    .filter((task) => new Date(task.dueAt) > endOfDay && new Date(task.dueAt) <= new Date(now.getTime() + 72 * HOUR))
+    .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt))[0];
+  if (soon) {
+    const when = daysBetween(now, new Date(soon.dueAt));
+    signals.push({
+      id: 'due-soon',
+      // Above a stalled area: a dated, specific deadline is more actionable
+      // than a chronic condition, and "due tomorrow" is the one worth leading
+      // with on the day you still have time to start it.
+      weight: 62,
+      lead: `${quote(soon.title)} is due ${when}.`,
+      detail: `${quote(soon.title)} is due ${when}. Starting it today is what stops it becoming an overdue one.`
     });
   }
 
@@ -150,6 +183,31 @@ export function collectSignals({ now = new Date(), tasks = [], calendar = [], tr
     signals.push({ id: 'low-energy', weight: 58, lead: 'You logged low energy.', detail: 'Low energy today, so the plan is short blocks with real breaks. Pick the one thing that has to happen and let the rest wait.' });
   }
 
+  /**
+   * A stalled area, from the same judgement the life cards show.
+   *
+   * Without this the cards could read STALLED while the briefing said nothing
+   * needed attention — the two halves of the page disagreeing about the same
+   * data. Slipping is deliberately not repeated here: an overdue item already
+   * produces the far stronger signal above.
+   */
+  const stalled = AREAS
+    .map((area) => domainStatus(area, { tasks, now }))
+    .filter((domain) => domain.status === 'stalled')
+    .sort((a, b) => (b.daysSinceLastDone ?? 999) - (a.daysSinceLastDone ?? 999));
+  if (stalled.length) {
+    const worst = stalled[0];
+    const label = AREA_LABELS[worst.area] || worst.area;
+    signals.push({
+      id: 'stalled',
+      weight: 48 + Math.min(10, stalled.length * 4),
+      lead: stalled.length === 1 ? `Your ${label} work has stalled.` : `${stalled.length} areas have stalled.`,
+      detail: stalled.length === 1
+        ? `${plural(worst.open, 'move')} open under ${label} and nothing finished there ${worst.daysSinceLastDone === null ? 'yet' : `in ${plural(worst.daysSinceLastDone, 'day')}`}. Move one of them today, however small.`
+        : `${stalled.map((domain) => AREA_LABELS[domain.area] || domain.area).join(' and ')} both have open work and nothing finished recently. Pick one and move it today.`
+    });
+  }
+
   if (!open.length) {
     signals.push({ id: 'queue-empty', weight: 40, lead: 'Your queue is clear.', detail: 'Nothing is open. Use the space to plan tomorrow or write down what actually worked today.' });
   }
@@ -158,6 +216,21 @@ export function collectSignals({ now = new Date(), tasks = [], calendar = [], tr
   const minutes = weekFocus.reduce((total, entry) => total + (entry.minutes || 0), 0);
   if (minutes >= 60) {
     signals.push({ id: 'focus', weight: 18, lead: `${Math.round(minutes / 60)}h of focus this week.`, detail: `${Math.floor(minutes / 60)}h ${minutes % 60}m of logged focus in the last seven days, across ${plural(weekFocus.length, 'session')}.` });
+  }
+
+  /**
+   * The floor. If work is open, the briefing always has something true to say,
+   * even when nothing above it fired — "nothing is pressing" while three moves
+   * sit in the queue is the kind of wrong that stops the panel being read.
+   */
+  if (open.length) {
+    const top = open[0];
+    signals.push({
+      id: 'open-work',
+      weight: 15,
+      lead: `${plural(open.length, 'move')} open. Start with ${quote(top.title)}.`,
+      detail: `Nothing is urgent. ${plural(open.length, 'move')} are open, and ${quote(top.title)} is the one to start with.`
+    });
   }
 
   return signals.sort((a, b) => b.weight - a.weight);
